@@ -17,22 +17,22 @@ int errors;
 int nr_nodes;
 int *node_to_use;
 
-int get_node_list()
-{
-        int a, got_nodes = 0, max_node, numnodes;
-        long free_node_sizes;
+// int get_node_list()
+// {
+//         int a, got_nodes = 0, max_node, numnodes;
+//         long free_node_sizes;
 
-        numnodes = numa_num_configured_nodes();
-        node_to_use = (int *)malloc(numnodes * sizeof(int));
-        max_node = numa_max_node();
-        for (a = 0; a <= max_node; a++) {
-                if (numa_node_size(a, &free_node_sizes) > 0)
-                        node_to_use[got_nodes++] = a;
-        }
-        if(got_nodes != numnodes)
-                return -1;
-        return got_nodes;
-}
+//         numnodes = numa_num_configured_nodes();
+//         node_to_use = (int *)malloc(numnodes * sizeof(int));
+//         max_node = numa_max_node();
+//         for (a = 0; a <= max_node; a++) {
+//                 if (numa_node_size(a, &free_node_sizes) > 0)
+//                         node_to_use[got_nodes++] = a;
+//         }
+//         if(got_nodes != numnodes)
+//                 return -1;
+//         return got_nodes;
+// }
 
 int main(int argc, char **argv)
 {
@@ -40,7 +40,7 @@ int main(int argc, char **argv)
 
 	pagesize = getpagesize();
 
-	nr_nodes = get_node_list();
+	nr_nodes = 2; // hardcoded for now
 
 	if (nr_nodes < 2) {
 		printf("A minimum of 2 nodes is required for this test.\n");
@@ -72,12 +72,12 @@ int main(int argc, char **argv)
 	for (i = 0; i < page_count; i++) {
 		pages[ i * pagesize ] = (char) i;
 		addr[i] = pages + i * pagesize;
-		nodes[i] = node_to_use[(i % nr_nodes)];
+        nodes[0] = 1; // node 0 is DRAM, node 1 is Optane
 		status[i] = -123;
 	}
 
 	printf("\nMoving pages to start node ...\n");
-	rc = numa_move_pages(0, page_count, addr, NULL, status, 0);
+	rc = move_pages(0, page_count, addr, NULL, status, 0);
 	if (rc < 0)
 		perror("move_pages");
 
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 		printf("Page %d vaddr=%p node=%d\n", i, pages + i * pagesize, status[i]);
 
 	printf("\nMoving pages to target nodes ...\n");
-	rc = numa_move_pages(0, page_count, addr, nodes, status, 0);
+	rc = move_pages(0, page_count, addr, nodes, status, 0);
 
 	if (rc < 0) {
 		perror("move_pages");
