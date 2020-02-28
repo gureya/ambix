@@ -71,12 +71,12 @@ int main(int argc, char **argv)
 	for (i = 0; i < page_count; i++) {
 		pages[ i * pagesize ] = (char) i;
 		addr[i] = pages + i * pagesize;
-        nodes[1] = 1; // node 0 is DRAM, node 1 is Optane
+        nodes[i] = 1; // node 0 is DRAM, node 1 is Optane
 		status[i] = -123;
 	}
 
 	printf("\nMoving pages to start node ...\n");
-	rc = move_pages(0, page_count, addr, NULL, status, 0);
+	rc = numa_move_pages(0, page_count, addr, NULL, status, 0);
 	if (rc < 0)
 		perror("move_pages");
 
@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 		printf("Page %d vaddr=%p node=%d\n", i, pages + i * pagesize, status[i]);
 
 	printf("\nMoving pages to target nodes ...\n");
-	rc = move_pages(0, page_count, addr, nodes, status, 0);
+	rc = numa_move_pages(0, page_count, addr, nodes, status, 0);
 
 	if (rc < 0) {
 		perror("move_pages");
@@ -94,7 +94,7 @@ int main(int argc, char **argv)
 	for (i = 0; i < page_count; i++) {
         if (pages[ i* pagesize ] != (char) i)
             errors++;
-        else if (nodes[i] != node_to_use[(i % nr_nodes)])
+        else if (nodes[i] != 1)
             errors++;
 	}
 
