@@ -7,10 +7,10 @@
 
 #include <unistd.h>
 
-
 extern int errno;
 
-#define RAM_SIZE 128
+#define RAM_SIZE 128 // in GB
+#define WORKLOAD_PER 0.5
 
 int access_array(int *array, size_t size, size_t page_size) {
     int var;
@@ -24,7 +24,7 @@ int main() {
     size_t page_size = sysconf(_SC_PAGESIZE);
     printf("Page Size is: %lu\n", page_size);
 
-    size_t array_size = (size_t) RAM_SIZE * 1024 * 1024 * 1024 * 0.8;
+    size_t array_size = (size_t) RAM_SIZE * 1024 * 1024 * 1024 * WORKLOAD_PER;
 
     // make number divisible by array type
     size_t rem = array_size % sizeof(int);
@@ -48,6 +48,7 @@ int main() {
     printf("mlockall() complete: took %f seconds\n", ((double)t)/CLOCKS_PER_SEC);
     char r[4];
     while(1) {
+        printf("Test complete. Type \"exit\" to clean up and exit\n");
         scanf("%s", r);
         if(!strcmp(r, "exit")) {
             break;

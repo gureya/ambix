@@ -2,11 +2,14 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <time.h>
+#include <errno.h>
 
 #include <unistd.h>
 
+extern int errno;
+
 #define RAM_SIZE 128 // in GB
-#define WORKLOAD_PER 0.21
 
 int access_array(int *array, size_t size, size_t page_size) {
     int var;
@@ -20,7 +23,7 @@ int main() {
     size_t page_size = sysconf(_SC_PAGESIZE);
     printf("Page Size is: %lu\n", page_size);
 
-    size_t array_size = (size_t) RAM_SIZE * 1024 * 1024 * 1024 * WORKLOAD_PER;
+    size_t array_size = (size_t) RAM_SIZE * 1024 * 1024 * 1024 * 0.8;
 
     // make number divisible by array type
     size_t rem = array_size % sizeof(int);
@@ -32,6 +35,17 @@ int main() {
     printf("End malloc\n");
     access_array(test_array, array_size/sizeof(int), page_size);
 
+    /*clock_t t;
+    printf("Starting mlockall()\n");
+    t = clock();
+    if(mlockall(MCL_CURRENT || MCL_FUTURE)) {
+        fprintf(stderr, "mlockall error: %s\n", strerror(errno));
+        free(test_array);
+        return 1;
+    }
+    t = clock() - t;
+    printf("mlockall() complete: took %f seconds\n", ((double)t)/CLOCKS_PER_SEC);*/
+
     char r[4];
     while(1) {
         printf("Test complete. Type \"exit\" to clean up and exit\n");
@@ -39,6 +53,11 @@ int main() {
         if(!strcmp(r, "exit")) {
             break;
         }
+    }
+    if(munlockall()) {
+        fprintf(stderr, "munlockall error: %s\n", strerror(errno));
+        free(test_array);
+        return 1;
     }
     free(test_array);
     return 0;
