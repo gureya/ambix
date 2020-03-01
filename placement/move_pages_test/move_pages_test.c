@@ -108,5 +108,12 @@ int main(int argc, char **argv)
 	else
 		printf("%d errors.\n", errors);
 
+    while(1) {
+        scanf("%s", r);
+        if(!strcmp(r, "exit")) {
+            break;
+        }
+    }
+
 	return errors > 0 ? 1 : 0;
 }
