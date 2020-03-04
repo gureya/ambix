@@ -36,7 +36,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Memory Access Monitor");
 MODULE_VERSION("0.2");
-MODULE_INFO(vermagic, "4.19.25 SMP preempt mod_unload "); // FIXME
+MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions "); // FIXME
 
 #define PROCFS_MAX_SIZE 2048
 #define PROCFS_NAME "dirty"
