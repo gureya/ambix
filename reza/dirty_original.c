@@ -1,11 +1,11 @@
 /**
  * @file    dirty.c
- * @author  Miguel Marques <miguel.soares.marques@tecnico.ulisboa.pt>
- * @date    3 March 2020
- * @version 0.2
- * @brief  Page walker for finding page table entries' R/M bits. Intended for the 5.7 Linux kernel.
- * Adapted from the code provided by Reza Karimi <r68karimi@gmail.com>
- * @see https://github.com/miguelmarques1904/pnp for a full description and follow-up descriptions.
+ * @author  Reza Karimi <r68karimi@gmail.com>
+ * @date    6 July 2018
+ * @version 0.1
+ * @brief  An efficient page access counter to analyze access patterns in linux
+ * environment
+ * @see http://0xreza.com/ for a full description and follow-up descriptions.
  */
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
@@ -31,10 +31,10 @@
 #include <linux/uaccess.h>
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Miguel Marques");
+MODULE_AUTHOR("Reza Karimi");
 MODULE_DESCRIPTION("Memory Access Monitor");
-MODULE_VERSION("0.2");
-MODULE_INFO(vermagic, "4.19.25 SMP preempt mod_unload "); // FIXME
+MODULE_VERSION("0.1");
+MODULE_INFO(vermagic, "4.19.25 SMP preempt mod_unload ");
 
 #define PROCFS_MAX_SIZE 2048
 #define PROCFS_NAME "dirty"
@@ -82,15 +82,15 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
 
 static int do_page_walk(void) {
   struct vm_area_struct *mmap;
-  struct mm_walk_ops mem_walk_ops = {
+  struct mm_walk mem_walk = {
       .pte_entry = pte_callback,
-      //.mm = task_item->mm,
+      .mm = task_item->mm,
   };
   mmap = task_item->mm->mmap;
   stat_index = 0;
   stat_count = 0;
   while (mmap != NULL) {
-    walk_page_vma(mmap, &mem_walk_ops, NULL);
+    walk_page_vma(mmap, &mem_walk);
     mmap = mmap->vm_next;
   }
   stat_count = stat_index;
