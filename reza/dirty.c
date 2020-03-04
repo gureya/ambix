@@ -15,8 +15,8 @@
 #include <linux/kernel.h>  // Contains types, macros, functions for the kernel
 #include <linux/kthread.h>
 #include <linux/mempolicy.h>
-#include <linux/mm.h>
-#include <linux/mm_types.h>
+//#include <linux/mm.h> // Both included by pagewalk.h
+//#include <linux/mm_types.h>
 #include <linux/module.h>  // Core header for loading LKMs into the kernel
 #include <linux/mount.h>
 #include <linux/pagemap.h>
@@ -29,6 +29,8 @@
 #include <linux/signal.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+
+#include <linux/pagewalk.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
