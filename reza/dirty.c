@@ -68,7 +68,12 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
     return 0;
   }
   stat_array[stat_index] = pte;
-  stat_index++;
+
+  if(stat_index++ > STAT_ARRAY_SIZE) {
+    printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
+    stat_index = 0;
+  }
+
   return 0;
 
   /* ---------- playing with accessed bit -------- */
@@ -92,7 +97,7 @@ static int do_page_walk(void) {
   stat_index = 0;
   stat_count = 0;
   while (mmap != NULL) {
-    walk_page_vma(mmap, &mem_walk_ops, NULL); //FIXME NULL?
+    walk_page_vma(mmap, &mem_walk_ops, NULL);
     mmap = mmap->vm_next;
   }
   stat_count = stat_index;
