@@ -6,9 +6,9 @@
 #include <unistd.h>
 
 #define RAM_SIZE 128 // in GB
-#define WORKLOAD_PER 0.10
+#define WORKLOAD_PER 0.01
 
-int access_array(int *array, size_t size, size_t page_size) {
+void access_array(int *array, size_t size, size_t page_size) {
     int var;
     for(size_t i=0; i<size; i+=page_size/sizeof(int)) {
 	//printf("i=%lu\n", i);
