@@ -36,7 +36,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Memory Access Monitor");
 MODULE_VERSION("0.2");
-MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions "); // FIXME
+MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 
 #define PROCFS_MAX_SIZE 2048
 #define PROCFS_NAME "dirty"
@@ -92,7 +92,7 @@ static int do_page_walk(void) {
   stat_index = 0;
   stat_count = 0;
   while (mmap != NULL) {
-    walk_page_vma(mmap, &mem_walk_ops, NULL);
+    walk_page_vma(mmap, &mem_walk_ops, NULL); //FIXME NULL?
     mmap = mmap->vm_next;
   }
   stat_count = stat_index;
