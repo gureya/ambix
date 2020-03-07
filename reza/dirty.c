@@ -5,7 +5,7 @@
  * @version 0.2
  * @brief  Page walker for finding page table entries' R/M bits. Intended for the 5.7 Linux kernel.
  * Adapted from the code provided by Reza Karimi <r68karimi@gmail.com>
- * @see https://github.com/miguelmarques1904/pnp for a full description and follow-up descriptions.
+ * @see https://github.com/miguelmarques1904/pnp for a full description of the module.
  */
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
@@ -63,11 +63,18 @@ static bool find_target_process(
 
 static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  if (!pte_present(*pte) ||
-      !pte_dirty(*pte)) {  // if page not present or unmodified
+  if (!pte_present(*pte)) { // If it is not present
     return 0;
   }
-  stat_array[stat_index] = pte;
+
+  if(pte_young(*pte)) {
+    *pte = pte_mkold(*pte); // unset reference bit
+  }
+
+  if(pte_dirty(*pte)) {
+    *pte = pte_mkclean(*pte); // unset dirty bit
+    stat_array[stat_index] = pte_val(*pte);
+  }
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
