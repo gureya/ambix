@@ -44,7 +44,7 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define STAT_ARRAY_SIZE 1000000
 #define P_NAME_MAX 100
 
-static pte_t *stat_array[STAT_ARRAY_SIZE];
+static pteval_t *stat_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
 struct task_struct *task_item;
