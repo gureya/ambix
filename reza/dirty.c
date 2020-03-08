@@ -31,6 +31,7 @@
 #include <linux/uaccess.h>
 
 #include <asm-generic/memory_model.h>
+#include <asm/pgtable.h>
 #include <linux/pagewalk.h>
 
 MODULE_LICENSE("GPL");
@@ -45,7 +46,7 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define STAT_ARRAY_SIZE 1000000
 #define P_NAME_MAX 100
 
-static unsigned long stat_array[STAT_ARRAY_SIZE];
+static char *stat_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
 struct task_struct *task_item;
@@ -77,7 +78,10 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   // }
 
   // convert pte to pfn to physical address
-  stat_array[stat_index] = pte_pfn(*pte);
+
+  char *addr = 
+
+  stat_array[stat_index] = pte_val(*pte) & PTE_PFN_MASK;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
@@ -134,7 +138,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "0x%lx\n", (unsigned long)stat_array[i]);
+    seq_printf(m, "%s\n", (unsigned long)stat_array[i]);
   }
   return 0;
 }
