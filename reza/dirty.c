@@ -34,6 +34,8 @@
 #include <asm/pgtable.h>
 #include <linux/pagewalk.h>
 
+#include <unistd.h>
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Memory Access Monitor");
@@ -47,8 +49,10 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define P_NAME_MAX 100
 
 static unsigned long stat_array[STAT_ARRAY_SIZE];
+static unsigned long phys_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
+static long page_size = sysconf(_SC_PAGESIZE);
 struct task_struct *task_item;
 static pid_t process_pid = -1;
 
@@ -79,9 +83,11 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
 
   // convert pte to pfn to physical address
 
-  unsigned long p_addr = pte_val(*pte) & PTE_PFN_MASK;
+  unsigned long pfn = pte_pfn(*pte);
+  unsigned long vaddr = pfn * page_size;
 
-  stat_array[stat_index] = p_addr;
+  stat_array[stat_index] = vaddr;
+  phys_array[stat_index] = __pa(vaddr);
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
@@ -138,7 +144,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "0x%lx, %lu\n", stat_array[i], stat_array[i]);
+    seq_printf(m, "%0x%lx, %lu\n, %0x%lx, %lu\n", stat_array[i], stat_array[i], phys_array[i], phys_array[i]);
   }
   return 0;
 }
