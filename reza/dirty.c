@@ -74,7 +74,9 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   // if(pte_dirty(*pte)) {
   //   *pte = pte_mkclean(*pte); // unset dirty bit
   // }
-  stat_array[stat_index] = pte_pfn(*pte);
+  
+  // convert pte to pfn to virtual address
+  stat_array[stat_index] = pfn_to_virt(pte_pfn(*pte));
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
