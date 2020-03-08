@@ -79,9 +79,9 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
 
   // convert pte to pfn to physical address
 
-  char *addr = 
+  char *addr = pte_val(*pte) & PTE_PFN_MASK
 
-  stat_array[stat_index] = pte_val(*pte) & PTE_PFN_MASK;
+  stat_array[stat_index] = addr;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
