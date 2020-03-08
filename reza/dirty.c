@@ -131,7 +131,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "0x%ulX\n", (unsigned long)stat_array[i]);
+    seq_printf(m, "0x%luX\n", (unsigned long)stat_array[i]);
   }
   return 0;
 }
