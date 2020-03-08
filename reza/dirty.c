@@ -79,9 +79,9 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
 
   // convert pte to pfn to physical address
 
-  unsigned long addr = pte_val(*pte) & PTE_PFN_MASK;
+  unsigned long p_addr = pte_val(*pte) & PTE_PFN_MASK;
 
-  stat_array[stat_index] = addr;
+  stat_array[stat_index] = p_addr;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
@@ -138,7 +138,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "%0x%lx, %lu\n", stat_array[i], stat_array[i]);
+    seq_printf(m, "0x%lx, %lu\n", stat_array[i], stat_array[i]);
   }
   return 0;
 }
