@@ -77,6 +77,9 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   // }
 
   // convert pte to pfn to physical address
+  if(pte_pfn(*pte) == 0) {
+    printk(KERN_INFO, "Found present page with pfn 0.\n");
+  }
   stat_array[stat_index] = __pfn_to_phys(pte_pfn(*pte));
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
