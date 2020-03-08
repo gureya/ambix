@@ -30,6 +30,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
+#include <linux/page.h>
 #include <linux/pagewalk.h>
 
 MODULE_LICENSE("GPL");
@@ -74,7 +75,7 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   // if(pte_dirty(*pte)) {
   //   *pte = pte_mkclean(*pte); // unset dirty bit
   // }
-  
+
   // convert pte to pfn to virtual address
   stat_array[stat_index] = pfn_to_virt(pte_pfn(*pte));
 
