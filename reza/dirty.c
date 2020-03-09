@@ -52,7 +52,7 @@ static unsigned long stat_array[STAT_ARRAY_SIZE];
 static unsigned long phys_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
-static long page_size = sysconf(_SC_PAGESIZE);
+static long pageSize = 4096;
 struct task_struct *task_item;
 static pid_t process_pid = -1;
 
@@ -84,7 +84,7 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   // convert pte to pfn to physical address
 
   unsigned long pfn = pte_pfn(*pte);
-  unsigned long vaddr = pfn * page_size;
+  unsigned long vaddr = pfn * pageSize;
 
   stat_array[stat_index] = vaddr;
   phys_array[stat_index] = __pa(vaddr);
@@ -144,7 +144,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "%0x%lx, %lu\n, %0x%lx, %lu\n", stat_array[i], stat_array[i], phys_array[i], phys_array[i]);
+    seq_printf(m, "0x%lx, %lu\n, 0x%lx, %lu\n", stat_array[i], stat_array[i], phys_array[i], phys_array[i]);
   }
   return 0;
 }
