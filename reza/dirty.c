@@ -34,8 +34,6 @@
 #include <asm/pgtable.h>
 #include <linux/pagewalk.h>
 
-#include <unistd.h>
-
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Memory Access Monitor");
