@@ -46,7 +46,7 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define STAT_ARRAY_SIZE 1000000
 #define P_NAME_MAX 100
 
-static pud_t *stat_array[STAT_ARRAY_SIZE];
+static unsigned long stat_array[STAT_ARRAY_SIZE];
 //static unsigned long phys_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
@@ -85,8 +85,8 @@ static int pud_callback(pud_t *pud, unsigned long addr, unsigned long next,
   // stat_array[stat_index] = vaddr;
   // phys_array[stat_index] = __pa(vaddr);
 
-  stat_array[stat_index] = pud;
-  stat_array[stat_index] = addr;
+  stat_array[stat_index] = (unsigned long) pud;
+  stat_array[stat_index] = (unsigned long) addr;
   stat_index++;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
