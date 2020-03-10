@@ -86,7 +86,7 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   // phys_array[stat_index] = __pa(vaddr);
 
   stat_array[stat_index] = (unsigned long) pte;
-  stat_array[stat_index] = (unsigned long) addr;
+  stat_array[stat_index] = (unsigned long) ((*walk)->vma).vm_start;
   stat_index++;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
