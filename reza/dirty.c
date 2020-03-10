@@ -46,7 +46,7 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define STAT_ARRAY_SIZE 1000000
 #define P_NAME_MAX 100
 
-static unsigned long stat_array[STAT_ARRAY_SIZE];
+static pmd_t *stat_array[STAT_ARRAY_SIZE];
 //static unsigned long phys_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
@@ -143,7 +143,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "0x%lx, %lu\n", stat_array[i], stat_array[i]);
+    seq_printf(m, "0x%lx, %lu\n", (unsigned long)stat_array[i], (unsigned long)stat_array[i]);
   }
   return 0;
 }
