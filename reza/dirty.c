@@ -64,9 +64,9 @@ static bool find_target_process(
   return false;
 }
 
-static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
+static int pmd_callback(pmd_t *pmd, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  if (!pte_present(*pte)) { // If it is not present
+  if (!pmd_present(*pmd)) { // If it is not present
     return 0;
   }
 
@@ -78,16 +78,7 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
   //   *pte = pte_mkclean(*pte); // unset dirty bit
   // }
 
-  // convert pte to pfn to physical address
-  // struct page curr_page = pgd_page(*pte);
-  // unsigned long vaddr = pfn * pageSize;
-
-  // stat_array[stat_index] = vaddr;
-  // phys_array[stat_index] = __pa(vaddr);
-
-  stat_array[stat_index] = (unsigned long) pte;
-  stat_array[stat_index] = (unsigned long) (*walk).(*vma).vm_start;
-  stat_index++;
+  stat_array[stat_index] = (unsigned long) walk->vma->vm_start;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
@@ -110,7 +101,7 @@ static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
 static int do_page_walk(void) {
   struct vm_area_struct *mmap;
   struct mm_walk_ops mem_walk_ops = {
-      .pte_entry = pte_callback,
+      .pmd_entry = pmd_callback,
       //.mm = task_item->mm,
   };
   mmap = task_item->mm->mmap;
@@ -144,7 +135,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "0x%lx, %lu\n", (unsigned long)stat_array[i], (unsigned long)stat_array[i]);
+    seq_printf(m, "0x%lx\n", stat_array[i]);
   }
   return 0;
 }
