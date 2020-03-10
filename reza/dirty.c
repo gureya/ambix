@@ -85,7 +85,7 @@ static int pmd_callback(pmd_t *pmd, unsigned long addr, unsigned long next,
   // stat_array[stat_index] = vaddr;
   // phys_array[stat_index] = __pa(vaddr);
 
-  stat_array[stat_index] = pgd;
+  stat_array[stat_index] = pmd;
   stat_index++;
 
   if(stat_index++ > STAT_ARRAY_SIZE) {
