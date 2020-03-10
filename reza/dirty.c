@@ -47,10 +47,9 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define P_NAME_MAX 100
 
 static unsigned long stat_array[STAT_ARRAY_SIZE];
-static unsigned long phys_array[STAT_ARRAY_SIZE];
+//static unsigned long phys_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
-static long pageSize = 4096;
 struct task_struct *task_item;
 static pid_t process_pid = -1;
 
@@ -65,9 +64,9 @@ static bool find_target_process(
   return false;
 }
 
-static int pgd_callback(pgd_t *pgd, unsigned long addr, unsigned long next,
+static int pmd_callback(pmd_t *pmd, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  if (!pgd_present(*pgd)) { // If it is not present
+  if (!pmd_present(*pmd)) { // If it is not present
     return 0;
   }
 
@@ -110,7 +109,7 @@ static int pgd_callback(pgd_t *pgd, unsigned long addr, unsigned long next,
 static int do_page_walk(void) {
   struct vm_area_struct *mmap;
   struct mm_walk_ops mem_walk_ops = {
-      .pgd_entry = pgd_callback,
+      .pmd_entry = pmd_callback,
       //.mm = task_item->mm,
   };
   mmap = task_item->mm->mmap;
