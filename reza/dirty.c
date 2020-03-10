@@ -64,9 +64,9 @@ static bool find_target_process(
   return false;
 }
 
-static int pud_callback(pud_t *pud, unsigned long addr, unsigned long next,
+static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  if (!pud_present(*pud)) { // If it is not present
+  if (!pte_present(*pte)) { // If it is not present
     return 0;
   }
 
@@ -85,7 +85,7 @@ static int pud_callback(pud_t *pud, unsigned long addr, unsigned long next,
   // stat_array[stat_index] = vaddr;
   // phys_array[stat_index] = __pa(vaddr);
 
-  stat_array[stat_index] = (unsigned long) pud;
+  stat_array[stat_index] = (unsigned long) pte;
   stat_array[stat_index] = (unsigned long) addr;
   stat_index++;
 
@@ -110,7 +110,7 @@ static int pud_callback(pud_t *pud, unsigned long addr, unsigned long next,
 static int do_page_walk(void) {
   struct vm_area_struct *mmap;
   struct mm_walk_ops mem_walk_ops = {
-      .pud_entry = pud_callback,
+      .pte_entry = pte_callback,
       //.mm = task_item->mm,
   };
   mmap = task_item->mm->mmap;
