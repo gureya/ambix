@@ -15,11 +15,8 @@
 #include <linux/kernel.h>  // Contains types, macros, functions for the kernel
 #include <linux/kthread.h>
 #include <linux/mempolicy.h>
-//#include <linux/mm.h> // Both included by pagewalk.h
-//#include <linux/mm_types.h>
 #include <linux/module.h>  // Core header for loading LKMs into the kernel
 #include <linux/mount.h>
-#include <linux/pagemap.h>
 #include <linux/proc_fs.h> /* Necessary because we use the proc fs */
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
@@ -30,8 +27,6 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#include <asm-generic/memory_model.h>
-#include <asm/pgtable.h>
 #include <linux/pagewalk.h>
 
 MODULE_LICENSE("GPL");
@@ -46,8 +41,9 @@ MODULE_INFO(vermagic, "5.5.7-patchedv2 SMP mod_unload modversions ");
 #define STAT_ARRAY_SIZE 1000000
 #define P_NAME_MAX 100
 
-static unsigned long stat_array[STAT_ARRAY_SIZE];
-//static unsigned long phys_array[STAT_ARRAY_SIZE];
+static unsigned long addr_array[STAT_ARRAY_SIZE];
+static int ref_array[STAT_ARRAY_SIZE];
+static int dirty_array[STAT_ARRAY_SIZE];
 static unsigned long stat_index = 0;
 static unsigned long stat_count = 0;
 struct task_struct *task_item;
@@ -64,22 +60,27 @@ static bool find_target_process(
   return false;
 }
 
-static int pmd_callback(pmd_t *pmd, unsigned long addr, unsigned long next,
+static int pte_callback(pte_t *ptep, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  if (!pmd_present(*pmd)) { // If it is not present
+  pte_t pte = *ptep;
+  // pte = pte_mkwrite(pte);
+
+  if(!pte_present(pte)) { // If it is not present
     return 0;
   }
 
-  // if(pte_young(*pte)) {
-  //   *pte = pte_mkold(*pte); // unset reference bit
-  // }
+  if(pte_young(pte)) {
+    ref_array[stat_index] = 1;
+  	pte = pte_mkold(pte); // unset reference bit
+  }
 
-  // if(pte_dirty(*pte)) {
-  //   *pte = pte_mkclean(*pte); // unset dirty bit
-  // }
+  if(pte_dirty(pte)) {
+	dirty_array[stat_index] = 1;
+	pte = pte_mkclean(pte); // unset dirty bit
+  }
 
-  stat_array[stat_index] = (unsigned long) walk->vma->vm_start;
 
+  addr_array[stat_index] = (unsigned long) addr;
   if(stat_index++ > STAT_ARRAY_SIZE) {
     printk(KERN_INFO "DIRTY: max array_size reached. Resetting.\n");
     stat_index = 0;
@@ -101,7 +102,7 @@ static int pmd_callback(pmd_t *pmd, unsigned long addr, unsigned long next,
 static int do_page_walk(void) {
   struct vm_area_struct *mmap;
   struct mm_walk_ops mem_walk_ops = {
-      .pmd_entry = pmd_callback,
+      .pte_entry = pte_callback,
       //.mm = task_item->mm,
   };
   mmap = task_item->mm->mmap;
@@ -135,7 +136,7 @@ static int dirty_daemon(void *unused) {
 static int my_proc_list_show(struct seq_file *m, void *v) {
   unsigned long int i;
   for (i = 0; i < stat_count; i++) {
-    seq_printf(m, "0x%lx\n", stat_array[i]);
+    seq_printf(m, "addr:0x%lx, r=%d, d=%d\n", addr_array[i], ref_array[i], dirty_array[i]);
   }
   return 0;
 }
