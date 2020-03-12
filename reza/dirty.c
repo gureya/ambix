@@ -62,22 +62,29 @@ static bool find_target_process(
 
 static int pte_callback(pte_t *ptep, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  pte_t pte = *ptep;
+  pte_t old_pte, pte = *ptep;
   // pte = pte_mkwrite(pte);
 
   if(!pte_present(pte)) { // If it is not present
     return 0;
   }
 
+  old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
+
   if(pte_young(pte)) {
     ref_array[stat_index] = 1;
-  	pte = pte_mkold(pte); // unset reference bit
+
+		pte = pte_mkold(old_pte); // unset reference bit
   }
 
   if(pte_dirty(pte)) {
-	dirty_array[stat_index] = 1;
-	pte = pte_mkclean(pte); // unset dirty bit
+	  dirty_array[stat_index] = 1;
+
+	  old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
+		pte = pte_mkclean(old_pte); // unset modified bit
   }
+
+  ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, pte);
 
 
   addr_array[stat_index] = (unsigned long) addr;
