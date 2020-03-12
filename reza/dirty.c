@@ -60,31 +60,26 @@ static bool find_target_process(
   return false;
 }
 
-static int pte_callback(pte_t *ptep, unsigned long addr, unsigned long next,
+static int pte_callback(pte_t *pte, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
-  pte_t old_pte, pte = *ptep;
   // pte = pte_mkwrite(pte);
 
-  if(!pte_present(pte)) { // If it is not present
+  if(!pte_present(*pte)) { // If it is not present
     return 0;
   }
 
-  old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
 
-  if(pte_young(pte)) {
-    ref_array[stat_index] = 1;
+  if(pte_young(*pte)) {
+    	ref_array[stat_index] = 1;
 
-		pte = pte_mkold(old_pte); // unset reference bit
+		*pte = pte_mkold(*pte); // unset reference bit
   }
 
-  if(pte_dirty(pte)) {
-	  dirty_array[stat_index] = 1;
+  if(pte_dirty(*pte)) {
+		dirty_array[stat_index] = 1;
 
-	  old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
-		pte = pte_mkclean(old_pte); // unset modified bit
+		*pte = pte_mkclean(*pte); // unset modified bit
   }
-
-  ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, pte);
 
 
   addr_array[stat_index] = (unsigned long) addr;
@@ -110,11 +105,14 @@ static int do_page_walk(void) {
   struct vm_area_struct *mmap;
   struct mm_walk_ops mem_walk_ops = {
       .pte_entry = pte_callback,
-      //.mm = task_item->mm,
   };
   mmap = task_item->mm->mmap;
   stat_index = 0;
   stat_count = 0;
+  memset(addr_array, 0, sizeof(addr_array));
+  memset(ref_array, 0, sizeof(ref_array));
+  memset(dirty_array, 0, sizeof(dirty_array));
+  
   while (mmap != NULL) {
     walk_page_vma(mmap, &mem_walk_ops, NULL);
     mmap = mmap->vm_next;
