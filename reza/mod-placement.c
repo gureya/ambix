@@ -118,14 +118,14 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
         return 0;
     }
 
-    if(pte_young() && pte_dirty()) {
+    if(pte_young(pte) && pte_dirty(pte)) {
         // Send to DRAM
         found_addrs[n_found].addr = addr;
         found_addrs[n_found++].pid_retval = curr_pid;
     }
 
     else if(!first_pass) {
-        if(pte_young() || pte_dirty()) {
+        if(pte_young(pte) || pte_dirty(pte)) {
             // Send to DRAM
             found_addrs[n_found].addr = addr;
             found_addrs[n_found++].pid_retval = curr_pid;
@@ -138,24 +138,22 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
     return 0;
 }
 
-static int do_page_walk(int mode, int n) {
+static int do_page_walk(int mode, int n) { // FIXME: limit address range
     struct vm_area_struct *mmap;
     struct mm_walk_ops mem_walk_ops = {
             .pte_entry = pte_callback_dram,
         };
 
-    if(mode == NVRAM_MODE) { // FIXME: send also r/m = 0 or check it and return appropriately. Ask this
+    if(mode == NVRAM_MODE) {
         first_pass = 1;
         kept_pages = 0;
-        mem_walk_ops = {
-            .pte_entry = pte_callback_nvram,
-        };
+        mem_walk_ops.pte_entry = pte_callback_nvram;
     }
 
     n_to_find = n;
-
-    for(int n_cycles=0; n_cycles < MAX_CYCLES; n_cycles++) {
-        for(int i=0; i<n_pids; i++) {
+    int n_cycles,i;
+    for(n_cycles = 0;n_cycles < MAX_CYCLES; n_cycles++) {
+        for(i = 0; i < n_pids; i++) {
             mmap = task_item[i]->mm->mmap;
             curr_pid = task_item[i]->pid;
 
@@ -191,7 +189,8 @@ static int bind_pid(pid_t pid) {
 
 static int unbind_pid(pid_t pid) {
     // Find which task to remove
-    for(int i=0; i<n_pids; i++) {
+    int i;
+    for(i = 0; i < n_pids; i++) {
         if(task_item[i]->pid == pid) {
             break;
         }
@@ -203,7 +202,8 @@ static int unbind_pid(pid_t pid) {
     }
 
     // Shift left all subsequent entries
-    for(int j=i; j<n_pids; j++) {
+    int j;
+    for(j = i; j < n_pids; j++) {
         task_item[j] = task_item[j+1];
     }
     n_pids--;
@@ -226,10 +226,10 @@ static void process_req(req_t req) {
             ret = do_page_walk(req.mode, req.pid_n);
             break;
         case BIND_OP:
-            ret = bind_pid((pid_t) req.pid_n));;
+            ret = bind_pid((pid_t) req.pid_n);
             break;
         case UNBIND_OP:
-            ret = unbind_pid((pid_t) req.pid_n));
+            ret = unbind_pid((pid_t) req.pid_n);
             break;
 
         default:
@@ -251,7 +251,8 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     // input
     nlmh = (struct nlmsghdr *) skb->data;
-    in_msg = (req_t) nlmsg_data(nlmh);
+
+    memcpy(nlmsg_data(nlmh), &in_msg, sizeof(req_t));
     sender_pid = nlmh->nlmsg_pid;
 
     process_req(in_msg);
@@ -267,7 +268,7 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
     NETLINK_CB(skb_out).dst_group = 0; // unicast
     memcpy(nlmsg_data(nlmh), &found_addrs, msg_size);
 
-    if ((res = nlmsg_unicast(nl_sk, skb_out, sender_pid)) < 0) {
+    if ((res = nlmsg_unicast(nl_sock, skb_out, sender_pid)) < 0) {
         printk(KERN_INFO "PLACEMENT: Error in output.\n");
     }
 }
@@ -280,18 +281,18 @@ static int __init _on_module_init(void) {
         .input = placement_nl_process_msg,
     };
 
-    nl_sk = netlink_kernel_create(&init_net, NETLINK_USER, &cfg);
-    if (!nl_sk) {
+    nl_sock = netlink_kernel_create(&init_net, NETLINK_USER, &cfg);
+    if (!nl_sock) {
         printk(KERN_ALERT "PLACEMENT: Error creating netlink socket.\n");
         return 1;
     }
 
-
+    return 0;
 }
 
 static void __exit _on_module_exit(void) {
     pr_info("PLACEMENT: Goodbye from module!\n");
-    netlink_kernel_release(nl_sk);
+    netlink_kernel_release(nl_sock);
 
 }
 module_init(_on_module_init);
