@@ -1,4 +1,6 @@
 CONFIG_MODULE_SIG=n
+CC = gcc
+CFLAGS = -Wall -lnuma -pthread -lm
 
 MODULE_FILENAME=mod-placement
 obj-m +=  $(MODULE_FILENAME).o
@@ -26,3 +28,6 @@ printlog:
 	sudo dmesg -c 
 	sudo insmod $(KO_FILE)
 	dmesg
+
+ctl: ctl-placement.c
+	${CC} ${CFLAGS} -o ctl-placement *.c
