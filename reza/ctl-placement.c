@@ -201,6 +201,7 @@ void *decide_placement(void *args) {
         sleep(MEMCHECK_INTERVAL);
     }
 
+    return NULL;
 }
 
 void *process_stdin(void *args) {
@@ -221,10 +222,10 @@ void *process_stdin(void *args) {
             pid = strtol(substring, NULL, 10);
             if((pid>0) && (pid<INT_MAX)) {
                 if(send_bind((int) pid)) {
-                    printf("Bind request success (pid=%d).\n", pid);
+                    printf("Bind request success (pid=%d).\n", (int) pid);
                 }
                 else {
-                    fprintf(stderr, "Bind request failed (pid=%d).\n", pid);
+                    fprintf(stderr, "Bind request failed (pid=%d).\n", (int) pid);
                 }
             }
             else {
@@ -240,10 +241,10 @@ void *process_stdin(void *args) {
             pid = strtol(substring, NULL, 10);
             if((pid>0) && (pid<INT_MAX)) {
                 if(send_unbind((int) pid)) {
-                    printf("Unbind request success (pid=%d).\n", pid);
+                    printf("Unbind request success (pid=%d).\n", (int) pid);
                 }
                 else {
-                    fprintf(stderr, "Unbind request failed (pid=%d).\n", pid);
+                    fprintf(stderr, "Unbind request failed (pid=%d).\n", (int) pid);
                 }
             }
             else {
@@ -263,6 +264,8 @@ void *process_stdin(void *args) {
     }
     exit_sig = 1;
     free(command);
+
+    return NULL;
 }
 
 void *process_socket(void *args) {

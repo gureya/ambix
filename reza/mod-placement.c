@@ -181,11 +181,11 @@ static int do_page_walk(int mode, int n) {
 
 static int bind_pid(pid_t pid) {
     if (!find_target_process(pid)) {
-        printk(KERN_INFO "PLACEMENT: Could not bind pid=%d!\n", pid);
+        printk(KERN_INFO "PLACEMENT: Could not bind pid=%d!\n", (int) pid);
         return 0;
     }
 
-    printk(KERN_INFO "PLACEMENT: Bound pid=%d!\n", pid);
+    printk(KERN_INFO "PLACEMENT: Bound pid=%d!\n", (int) pid);
     return 1;
 }
 
@@ -198,7 +198,7 @@ static int unbind_pid(pid_t pid) {
     }
 
     if(i == n_pids) {
-        printk(KERN_INFO "PLACEMENT: Could not unbind pid=%d!\n", pid);
+        printk(KERN_INFO "PLACEMENT: Could not unbind pid=%d!\n", (int) pid);
         return 0;
     }
 

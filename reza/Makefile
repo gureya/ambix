@@ -30,4 +30,4 @@ printlog:
 	dmesg
 
 ctl: ctl-placement.c
-	${CC} ${CFLAGS} -o ctl-placement *.c
+	${CC} ${CFLAGS} -o ctl-placement.o ctl-placement.c
