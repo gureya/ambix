@@ -65,7 +65,7 @@ static int find_target_process(pid_t pid) {  // to find the task struct by proce
         return -1;
     }
     for_each_process(task_item[n_pids]) {
-        if (task_item->pid == pid) {
+        if (task_item[n_pids]->pid == pid) {
             n_pids++;
             return 0;
         }
@@ -236,7 +236,7 @@ static void process_req(req_t req) {
             printk(KERN_INFO "PLACEMENT: Unrecognized opcode!\n");
     }
 
-    found_addrs[n_found++].pid_retval(ret);
+    found_addrs[n_found++].pid_retval = ret;
 }
 
 
