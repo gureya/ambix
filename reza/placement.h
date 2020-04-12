@@ -20,7 +20,7 @@
 #define MAX_PAYLOAD 4096 // Theoretical max is 32KB - netlink header - padding
 
 // Unix Domain Socket:
-#define UDS_path "\0socket"
+#define UDS_path "./socket"
 #define MAX_BACKLOG 5
 
 // Comm-related OP codes:
@@ -48,5 +48,6 @@ typedef struct req {
 #define DRAM_TARGET 0.9
 #define DRAM_THRESH 0.05
 #define MEMCHECK_INTERVAL 4
+#define ACK 1
 
 #endif

@@ -31,3 +31,6 @@ printlog:
 
 ctl: ctl-placement.c
 	${CC} ${CFLAGS} -o ctl-placement.o ctl-placement.c
+
+client: client-placement.c
+	${CC} ${CFLAGS} -o client-placement.o client-placement.c

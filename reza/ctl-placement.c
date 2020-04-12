@@ -274,8 +274,9 @@ void *process_socket(void *args) {
     int unix_fd, acc, rd;
     req_t unix_req;
     
+    
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "Error creating UD  fd: %s\n", strerror(errno));
+        fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));
         return NULL;
     }
     memset(&uds_addr, 0, sizeof(uds_addr));
@@ -285,18 +286,18 @@ void *process_socket(void *args) {
     unlink(UDS_path); // unlink to avoid error in bind
 
     if (bind(unix_fd, (struct sockaddr*)&uds_addr, sizeof(uds_addr)) == -1) {
-        fprintf(stderr, "Error binding UD socket fd: %s\n", strerror(errno));
+        fprintf(stderr, "Error binding UDS: %s\n", strerror(errno));
         return NULL;
     }
 
     if (listen(unix_fd, MAX_BACKLOG) == -1) {
-        fprintf(stderr, "Error marking UD socket fd as passive: %s\n", strerror(errno));
+        fprintf(stderr, "Error marking UDS as passive: %s\n", strerror(errno));
         return NULL;
     }
 
     while(!exit_sig) {
         if ((acc = accept(unix_fd, NULL, NULL)) == -1) {
-            fprintf(stderr, "Failed accepting incoming UD socket fd connection: %s\n", strerror(errno));
+            fprintf(stderr, "Failed accepting incoming UDS connection: %s\n", strerror(errno));
             continue;
         }
 
@@ -324,7 +325,7 @@ void *process_socket(void *args) {
         }
 
         if (rd < 0) {
-            fprintf(stderr, "Error reading from accepted UD socket connection: %s\n", strerror(errno));
+            fprintf(stderr, "Error reading from accepted UDS connection: %s\n", strerror(errno));
             return NULL;
         }
 
