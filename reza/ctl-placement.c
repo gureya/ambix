@@ -1,6 +1,5 @@
 #include "placement.h"
 
-
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <linux/netlink.h>
@@ -29,10 +28,6 @@ long page_size;
 int do_NVRAM_DRAM = 1;
 
 volatile int exit_sig = 0;
-
-req_t req;
-addr_info_t candidates[MAX_N_FIND]; // contains candidate pages that result from a find command
-addr_info_t op_retval;
 
 pthread_t stdin_thread, socket_thread, placement_thread;
 pthread_mutex_t comm_lock;
@@ -68,59 +63,68 @@ void configure_addrs() {
 }
 
 int send_bind(int pid) {
-    pthread_mutex_lock(&comm_lock);
+    req_t req;
+    addr_info_t op_retval;
+
     req.op_code = BIND_OP;
     req.pid_n = pid;
+
+    pthread_mutex_lock(&comm_lock);
 
     memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
     sendmsg(netlink_fd, &msg, 0);
 
     recvmsg(netlink_fd, &msg, 0);
-
     memcpy(NLMSG_DATA(nlmh), &op_retval, sizeof(addr_info_t));
-    if(!op_retval.pid_retval) {
-        pthread_mutex_unlock(&comm_lock);
-        return 0;
-    }
 
     pthread_mutex_unlock(&comm_lock);
+
+    if(!op_retval.pid_retval) {
+        return 0;
+    }
     return 1;
 }
 
 int send_unbind(int pid) {
-    pthread_mutex_lock(&comm_lock);
+    req_t req;
+    addr_info_t op_retval;
+
     req.op_code = UNBIND_OP;
     req.pid_n = pid;
+
+    pthread_mutex_lock(&comm_lock);
 
     memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
     sendmsg(netlink_fd, &msg, 0);
 
     recvmsg(netlink_fd, &msg, 0);
-
     memcpy(NLMSG_DATA(nlmh), &op_retval, sizeof(addr_info_t));
-    if(!op_retval.pid_retval) {
-        pthread_mutex_unlock(&comm_lock);
-        return 0;
-    }
 
     pthread_mutex_unlock(&comm_lock);
+
+    if(!op_retval.pid_retval) {
+        return 0;
+    }
     return 1;
 }
 
 int send_find(int n_pages, int mode) {
-    pthread_mutex_lock(&comm_lock);
+    req_t req;
+    addr_info_t candidates[n_pages]; // contains candidate pages that result from a find command
 
     req.op_code = UNBIND_OP;
     req.pid_n = n_pages;
     req.mode = mode;
 
+    pthread_mutex_lock(&comm_lock);
+
     memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
     sendmsg(netlink_fd, &msg, 0);
 
     recvmsg(netlink_fd, &msg, 0);
-
     memcpy(NLMSG_DATA(nlmh), &candidates, sizeof(addr_info_t) * n_pages);
 
+    pthread_mutex_unlock(&comm_lock);
 
     int n_found=0;
     int n_migrated=0;
@@ -157,7 +161,6 @@ int send_find(int n_pages, int mode) {
             free(addr);
             free(dest_nodes);
             free(status);
-            pthread_mutex_unlock(&comm_lock);
             return n_migrated;
         }
         n_migrated += j;
@@ -166,7 +169,7 @@ int send_find(int n_pages, int mode) {
     free(addr);
     free(dest_nodes);
     free(status);
-    pthread_mutex_unlock(&comm_lock);
+
     return n_found;
 }
 
@@ -378,15 +381,15 @@ int main() {
         return 1;
     }
 
-    if(pthread_create(&placement_thread, NULL, decide_placement, NULL)) {
-        fprintf(stderr, "Error spawning placement thread: %s\n", strerror(errno));
-        free(nlmh);
-        return 1;
-    }
+    // if(pthread_create(&placement_thread, NULL, decide_placement, NULL)) {
+    //     fprintf(stderr, "Error spawning placement thread: %s\n", strerror(errno));
+    //     free(nlmh);
+    //     return 1;
+    // }
 
     pthread_join(stdin_thread, NULL);
     pthread_join(socket_thread, NULL);
-    pthread_join(placement_thread, NULL);
+    //pthread_join(placement_thread, NULL);
 
     pthread_mutex_destroy(&comm_lock);
 

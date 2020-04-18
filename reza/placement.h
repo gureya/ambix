@@ -1,8 +1,8 @@
 #ifndef _PLACEMENT_H
 #define _PLACEMENT_H
 
-#define MAX_PID_SIZE 7 // maximum PID value is 2^22
 #define MAX_PIDS 20
+#define MAX_PID_N 32768 // default max pid number in /proc/sys/kernel/pid_max
 
 // Find-related constants:
 #define DRAM_MODE 0
@@ -48,6 +48,7 @@ typedef struct req {
 #define DRAM_TARGET 0.9
 #define DRAM_THRESH 0.05
 #define MEMCHECK_INTERVAL 4
-#define ACK 1
+#define IS_64BIT (sizeof(void*) == 8)
+#define MAX_ADDRESS (IS_64BIT ? 140737488355328 : 3221225472) // Max user-space addresses: 64-bit=0-0x7fffffffffff, 32-bit=0xbfffffff
 
 #endif

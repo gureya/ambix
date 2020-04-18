@@ -3,7 +3,7 @@
 
 // Client bind via UDS
 
-extern int bind_uds(int addr_start, int addr_end);
+extern int bind_uds();
 extern int unbind_uds();
 
 #endif

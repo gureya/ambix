@@ -10,7 +10,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-int bind_uds(int addr_start, int addr_end) {
+int bind_uds() {
     // Unix domain socket
     struct sockaddr_un uds_addr;
     int unix_fd, w_ret;
@@ -35,7 +35,7 @@ int bind_uds(int addr_start, int addr_end) {
     bind_req.op_code = BIND_OP;
     bind_req.pid_n = pid;
 
-    if (w_ret = (write(unix_fd, &bind_req, sizeof(bind_req)) != sizeof(bind_req))) {
+    if ((w_ret = write(unix_fd, &bind_req, sizeof(bind_req))) != sizeof(bind_req)) {
         if (w_ret == -1) {
             fprintf(stderr, "Error writing to UDS fd: %s\n", strerror(errno));
         }
@@ -75,7 +75,7 @@ int unbind_uds() {
     unbind_req.op_code = UNBIND_OP;
     unbind_req.pid_n = pid;
 
-    if (w_ret = (write(unix_fd, &unbind_req, sizeof(unbind_req)) != sizeof(unbind_req))) {
+    if ((w_ret = write(unix_fd, &unbind_req, sizeof(unbind_req))) != sizeof(unbind_req)) {
         if (w_ret == -1) {
             fprintf(stderr, "Error writing to UDS fd: %s\n", strerror(errno));
         }
@@ -87,4 +87,18 @@ int unbind_uds() {
     }
 
     return 1;
+}
+
+
+int main() {
+    int a;
+    if(!bind_uds((unsigned long) &a,(unsigned long) &a + 100)) {
+        return 1;
+    }
+    printf("BIND OK\n");
+    if(!unbind_uds()) {
+        return 1;
+    }
+    printf("UNBIND OK\n");
+    return 0;
 }
