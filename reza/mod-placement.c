@@ -148,7 +148,7 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
 }
 
 static int do_page_walk(int mode, int n) {
-    struct vm_area_struct *mmap;
+    struct mm_struct *mm;
     struct mm_walk_ops mem_walk_ops = {
             .pte_entry = pte_callback_dram,
         };
@@ -165,36 +165,36 @@ static int do_page_walk(int mode, int n) {
         int i;
         
         // begin cycle at last_pid->last_addr
-        mmap = task_item[last_pid]->mm->mmap;
+        mm = task_item[last_pid]->mm;
         curr_pid = task_item[last_pid]->pid;
-        walk_page_range(mmap, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
+        walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
         if(n_found >= n_to_find) {
             return 0;
         }
 
         for(i = last_pid+1; i < n_pids; i++) {
 
-            mmap = task_item[i]->mm->mmap;
+            mm = task_item[i]->mm;
             curr_pid = task_item[i]->pid;
-            walk_page_range(mmap, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+            walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
             if(n_found >= n_to_find) {
                 return 0;
             }
         }
 
         for(i = 0; i < last_pid-1; i++) {
-            mmap = task_item[i]->mm->mmap;
+            mm = task_item[i]->mm;
             curr_pid = task_item[i]->pid;
-            walk_page_range(mmap, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+            walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
             if(n_found >= n_to_find) {
                 return 0;
             }
         }
 
         // finish cycle at last_pid->last_addr
-        mmap = task_item[last_pid]->mm->mmap;
+        mm = task_item[last_pid]->mm;
         curr_pid = task_item[last_pid]->pid;
-        walk_page_range(mmap, 0, last_addr+1, &mem_walk_ops, NULL);
+        walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
         if(n_found >= n_to_find) {
             return 0;
         }
@@ -210,23 +210,23 @@ static int do_page_walk(int mode, int n) {
 }
 
 static int bind_pid(pid_t pid) {
-    if((pid == NULL) || (pid < 0) || (pid > MAX_PID_N)) {
+    if((pid <= 0) || (pid > MAX_PID_N)) {
         printk(KERN_INFO "PLACEMENT: Invalid pid value in bind command.\n");
-        return 0;
+        return -1;
     }
     if (!find_target_process(pid)) {
         printk(KERN_INFO "PLACEMENT: Could not bind pid=%d!\n", pid);
-        return 0;
+        return -1;
     }
 
     printk(KERN_INFO "PLACEMENT: Bound pid=%d!\n", pid);
-    return 1;
+    return 0;
 }
 
 static int unbind_pid(pid_t pid) {
-    if((pid == NULL) || (pid < 0) || (pid > MAX_PID_N)) {
+    if((pid <= 0) || (pid > MAX_PID_N)) {
         printk(KERN_INFO "PLACEMENT: Invalid pid value in unbind command.\n");
-        return 0;
+        return -1;
     }
 
     // Find which task to remove
@@ -239,7 +239,7 @@ static int unbind_pid(pid_t pid) {
 
     if(i == n_pids) {
         printk(KERN_INFO "PLACEMENT: Could not unbind pid=%d!\n", pid);
-        return 0;
+        return -1;
     }
 
     // Shift left all subsequent entries
@@ -249,7 +249,7 @@ static int unbind_pid(pid_t pid) {
     }
     n_pids--;
 
-    return 1;
+    return 0;
 }
 
 /* Valid commands:
@@ -259,21 +259,20 @@ UNBIND [pid]
 FIND [tier] [n]
 
 */
-static void process_req(req_t *reqp) {
+static void process_req(req_t *req) {
     int ret = -1;
 
-    if(reqp != NULL) {
-        req_t req = *reqp;
+    if(req != NULL) {
         n_found = 0;
-        switch(req.op_code) {
+        switch(req->op_code) {
             case FIND_OP:
-                ret = do_page_walk(req.mode, req.pid_n);
+                ret = do_page_walk(req->mode, req->pid_n);
                 break;
             case BIND_OP:
-                ret = bind_pid((pid_t) req.pid_n);
+                ret = bind_pid(req->pid_n);
                 break;
             case UNBIND_OP:
-                ret = unbind_pid((pid_t) req.pid_n);
+                ret = unbind_pid(req->pid_n);
                 break;
 
             default:
@@ -291,37 +290,32 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
     int sender_pid;
     struct sk_buff *skb_out;
     int msg_size;
-    req_t *in_msg;
+    req_t *in_req;
     int res;
 
-    if(!(in_msg = kmalloc(sizeof(req_t), GFP_KERNEL))) {
-        printk(KERN_ERR "Failed to allocate request buffer.\n");
-    }
     // input
     nlmh = (struct nlmsghdr *) skb->data;
 
-    memcpy(nlmsg_data(nlmh), in_msg, sizeof(req_t));
+    in_req = (req_t *) NLMSG_DATA(nlmh);
     sender_pid = nlmh->nlmsg_pid;
 
-    process_req(in_msg);
+    process_req(in_req);
 
     msg_size = sizeof(addr_info_t) * n_found;
     skb_out = nlmsg_new(msg_size, 0);
     if (!skb_out) {
         printk(KERN_ERR "Failed to allocate new skb.\n");
-        kfree(in_msg);
         return;
     }
 
     nlmh = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
     NETLINK_CB(skb_out).dst_group = 0; // unicast
-    memcpy(nlmsg_data(nlmh), &found_addrs, msg_size);
+    memcpy(NLMSG_DATA(nlmh), found_addrs, msg_size);
 
     if ((res = nlmsg_unicast(nl_sock, skb_out, sender_pid)) < 0) {
-        printk(KERN_INFO "PLACEMENT: Error in output.\n");
+        printk(KERN_INFO "PLACEMENT: Error sending bak to user.\n");
     }
 
-    kfree(in_msg);
 }
 
 
@@ -331,7 +325,7 @@ static int __init _on_module_init(void) {
     last_addr = 0;
     last_pid = 0;
     task_item = kmalloc(MAX_PIDS * sizeof(struct task_struct *), GFP_KERNEL);
-    addr_info = kmalloc(MAX_N_FIND * sizeof(addr_info_t), GFP_KERNEL);
+    found_addrs = kmalloc(MAX_N_FIND * sizeof(addr_info_t), GFP_KERNEL);
 
     struct netlink_kernel_cfg cfg = {
         .input = placement_nl_process_msg,
@@ -351,7 +345,7 @@ static void __exit _on_module_exit(void) {
     netlink_kernel_release(nl_sock);
 
     kfree(task_item);
-    kfree(addr_info);
+    kfree(found_addrs);
 }
 
 module_init(_on_module_init);

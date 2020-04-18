@@ -64,7 +64,7 @@ void configure_addrs() {
 
 int send_bind(int pid) {
     req_t req;
-    addr_info_t op_retval;
+    addr_info_t *op_retval;
 
     req.op_code = BIND_OP;
     req.pid_n = pid;
@@ -75,19 +75,19 @@ int send_bind(int pid) {
     sendmsg(netlink_fd, &msg, 0);
 
     recvmsg(netlink_fd, &msg, 0);
-    memcpy(NLMSG_DATA(nlmh), &op_retval, sizeof(addr_info_t));
+    op_retval = (addr_info_t *) NLMSG_DATA(nlmh);
 
     pthread_mutex_unlock(&comm_lock);
 
-    if(!op_retval.pid_retval) {
-        return 0;
+    if(op_retval->pid_retval == 0) {
+        return 1;
     }
-    return 1;
+    return 0;
 }
 
 int send_unbind(int pid) {
     req_t req;
-    addr_info_t op_retval;
+    addr_info_t *op_retval;
 
     req.op_code = UNBIND_OP;
     req.pid_n = pid;
@@ -98,19 +98,19 @@ int send_unbind(int pid) {
     sendmsg(netlink_fd, &msg, 0);
 
     recvmsg(netlink_fd, &msg, 0);
-    memcpy(NLMSG_DATA(nlmh), &op_retval, sizeof(addr_info_t));
+    op_retval = (addr_info_t *) NLMSG_DATA(nlmh);
 
     pthread_mutex_unlock(&comm_lock);
 
-    if(!op_retval.pid_retval) {
-        return 0;
+    if(op_retval->pid_retval == 0) {
+        return 1;
     }
-    return 1;
+    return 0;
 }
 
 int send_find(int n_pages, int mode) {
     req_t req;
-    addr_info_t candidates[n_pages]; // contains candidate pages that result from a find command
+    addr_info_t *candidates; // contains candidate pages that result from a find command
 
     req.op_code = UNBIND_OP;
     req.pid_n = n_pages;
@@ -122,7 +122,7 @@ int send_find(int n_pages, int mode) {
     sendmsg(netlink_fd, &msg, 0);
 
     recvmsg(netlink_fd, &msg, 0);
-    memcpy(NLMSG_DATA(nlmh), &candidates, sizeof(addr_info_t) * n_pages);
+    candidates = (addr_info_t *) NLMSG_DATA(nlmh);
 
     pthread_mutex_unlock(&comm_lock);
 
