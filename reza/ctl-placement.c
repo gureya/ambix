@@ -212,7 +212,7 @@ void *process_stdin(void *args) {
     char *substring;
     long pid;
 
-    while((fgets(command, MAX_COMMAND_SIZE, stdin) != NULL) && strcmp(command, "exit")) {
+    while((fgets(command, MAX_COMMAND_SIZE, stdin) != NULL) && strcmp(command, "exit\n")) {
         if((substring = strtok(command, " ")) == NULL) {
             continue;
         }
@@ -274,8 +274,11 @@ void *process_stdin(void *args) {
 void *process_socket(void *args) {
     // Unix domain socket
     struct sockaddr_un uds_addr;
-    int unix_fd, acc, rd;
+    int unix_fd, sel, rd;
     req_t unix_req;
+
+    struct timeval sel_timeout;
+    fd_set readfds;
     
     
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
@@ -298,48 +301,56 @@ void *process_socket(void *args) {
         return NULL;
     }
 
-    while(!exit_sig) {
-        if ((acc = accept(unix_fd, NULL, NULL)) == -1) {
-            fprintf(stderr, "Failed accepting incoming UDS connection: %s\n", strerror(errno));
-            continue;
-        }
+    FD_ZERO(&fd_s);
+    FD_SET(unix_fd, &fd_s);
 
-        while( (rd = read(acc,&unix_req,sizeof(req_t))) == sizeof(req_t)) {
-            switch(unix_req.op_code) {
-                case BIND_OP:
-                    if(send_bind(unix_req.pid_n)) {
-                        printf("Bind request success (pid=%d).\n", unix_req.pid_n);
-                    }
-                    else {
-                        fprintf(stderr, "Bind request failed (pid=%d).\n", unix_req.pid_n);
-                    }
-                    break;
-                case UNBIND_OP:
-                    if(send_unbind(unix_req.pid_n)) {
-                        printf("Unbind request success (pid=%d).\n", unix_req.pid_n);
-                    }
-                    else {
-                        fprintf(stderr, "Unbind request failed (pid=%d).\n", unix_req.pid_n);
-                    }
-                    break;
-                default:
-                    fprintf(stderr, "Unexpected request OPcode from accepted UD socket connection");
+    while(!exit_sig) {
+        sel_timeout.tv_sec = SELECT_TIMEOUT;
+
+        sel = select(unix_fd+1, &readfds, NULL, NULL, &sel_timeout);
+        if (sel == -1) {
+            fprintf(stderr, "Error in UDS select: %s.\n", strerror(errno));
+            return NULL;
+        } else if ((sel > 0) && FD_ISSET(unix_fd, &readfds)) {
+            if ((acc = accept(unix_fd, NULL, NULL)) == -1) {
+                fprintf(stderr, "Failed accepting incoming UDS connection: %s\n", strerror(errno));
+                continue;
+            }
+            while( (rd = read(acc, &unix_req,sizeof(req_t))) == sizeof(req_t)) {
+                switch(unix_req.op_code) {
+                    case BIND_OP:
+                        if(send_bind(unix_req.pid_n)) {
+                            printf("Bind request success (pid=%d).\n", unix_req.pid_n);
+                        }
+                        else {
+                            fprintf(stderr, "Bind request failed (pid=%d).\n", unix_req.pid_n);
+                        }
+                        break;
+                    case UNBIND_OP:
+                        if(send_unbind(unix_req.pid_n)) {
+                            printf("Unbind request success (pid=%d).\n", unix_req.pid_n);
+                        }
+                        else {
+                            fprintf(stderr, "Unbind request failed (pid=%d).\n", unix_req.pid_n);
+                        }
+                        break;
+                    default:
+                        fprintf(stderr, "Unexpected request OPcode from accepted UD socket connection");
+                }
+            }
+
+            if (rd < 0) {
+                fprintf(stderr, "Error reading from accepted UDS connection: %s\n", strerror(errno));
+                return NULL;
+            }
+
+            else if (rd == 0) {
+                close(acc);
+            }
+            else {
+                fprintf(stderr, "Unexpected amount of bytes read from accepted UD socket connection.\n");
             }
         }
-
-        if (rd < 0) {
-            fprintf(stderr, "Error reading from accepted UDS connection: %s\n", strerror(errno));
-            return NULL;
-        }
-
-        else if (rd == 0) {
-            close(acc);
-        }
-        else {
-            fprintf(stderr, "Unexpected amount of bytes read from accepted UD socket connection.\n");
-        }
-    }
-
     return NULL;
 }
 
