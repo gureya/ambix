@@ -1,6 +1,7 @@
 #include "placement.h"
 
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <sys/un.h>
 #include <linux/netlink.h>
 
@@ -25,7 +26,7 @@ struct msghdr msg;
 
 long page_size;
 
-int do_NVRAM_DRAM = 1;
+int do_NVRAM_DRAM = 0;
 
 volatile int exit_sig = 0;
 
@@ -62,6 +63,52 @@ void configure_addrs() {
     dst_addr.nl_groups = 0; // unicast
 }
 
+addr_info_t *send_req(req_t req) {
+    addr_info_t *resp;
+
+    pthread_mutex_lock(&comm_lock);
+
+    configure_hdr();
+    configure_iov_mhdr();
+
+    memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
+    sendmsg(netlink_fd, &msg, 0);
+    recvmsg(netlink_fd, &msg, 0);
+
+    resp = (addr_info_t *) NLMSG_DATA(nlmh);
+
+    pthread_mutex_unlock(&comm_lock);
+
+    return resp;
+}
+
+// void print_command(char *cmd) {
+//   FILE *fp;
+//   char buf[1024];
+
+//   if ((fp = popen(cmd, "r")) == NULL) {
+//     perror("popen");
+//     exit(-1);
+//   }
+
+//   while(fgets(buf, sizeof(buf), fp) != NULL) {
+//     printf("%s", buf);
+//   }
+
+//   if(pclose(fp))  {
+//     perror("pclose");
+//     exit(-1);
+//   }
+// }
+
+// void print_node_allocations(int pid) {
+//     char buf[1024];
+//     snprintf(buf, sizeof(buf), "numastat -c %d", getpid());
+//     printf("\x1B[32m");
+//     print_command(buf);
+//     printf("\x1B[0m");
+// }
+
 int send_bind(int pid) {
     req_t req;
     addr_info_t *op_retval;
@@ -69,16 +116,8 @@ int send_bind(int pid) {
     req.op_code = BIND_OP;
     req.pid_n = pid;
 
-    pthread_mutex_lock(&comm_lock);
 
-    memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
-    sendmsg(netlink_fd, &msg, 0);
-
-    recvmsg(netlink_fd, &msg, 0);
-    op_retval = (addr_info_t *) NLMSG_DATA(nlmh);
-
-    pthread_mutex_unlock(&comm_lock);
-
+    op_retval = send_req(req);
     if(op_retval->pid_retval == 0) {
         return 1;
     }
@@ -92,16 +131,7 @@ int send_unbind(int pid) {
     req.op_code = UNBIND_OP;
     req.pid_n = pid;
 
-    pthread_mutex_lock(&comm_lock);
-
-    memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
-    sendmsg(netlink_fd, &msg, 0);
-
-    recvmsg(netlink_fd, &msg, 0);
-    op_retval = (addr_info_t *) NLMSG_DATA(nlmh);
-
-    pthread_mutex_unlock(&comm_lock);
-
+    op_retval = send_req(req);
     if(op_retval->pid_retval == 0) {
         return 1;
     }
@@ -112,24 +142,17 @@ int send_find(int n_pages, int mode) {
     req_t req;
     addr_info_t *candidates; // contains candidate pages that result from a find command
 
-    req.op_code = UNBIND_OP;
+    req.op_code = FIND_OP;
     req.pid_n = n_pages;
     req.mode = mode;
 
-    pthread_mutex_lock(&comm_lock);
+    
+    candidates = send_req(req);
 
-    memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
-    sendmsg(netlink_fd, &msg, 0);
-
-    recvmsg(netlink_fd, &msg, 0);
-    candidates = (addr_info_t *) NLMSG_DATA(nlmh);
-
-    pthread_mutex_unlock(&comm_lock);
-
-    int n_found=0;
+    int n_found=-1;
     int n_migrated=0;
 
-    while(candidates[n_found++].pid_retval > 0);
+    while(candidates[++n_found].pid_retval > 0);
 
     int dest_node = DRAM_NODE;
     if(mode == DRAM_MODE) {
@@ -138,6 +161,10 @@ int send_find(int n_pages, int mode) {
         if(candidates[n_found].pid_retval == -2) {
             do_NVRAM_DRAM = 0;
         }
+    }
+
+    if(n_found == 0) {
+        return 0;
     }
 
     void **addr = malloc(sizeof(unsigned long) * n_found);
@@ -181,7 +208,9 @@ void *decide_placement(void *args) {
 
     while(!exit_sig) {
         node_sz = numa_node_size64(DRAM_NODE, &node_fr);
-        usage = node_fr / node_sz;
+        usage = 1.0 * (node_sz - node_fr) / node_sz;
+
+        printf("Current DRAM Usage: %0.2f%%\n", usage*100);
 
         if(usage > (DRAM_TARGET+DRAM_THRESH)) {
             n_pages = ceil((usage - DRAM_TARGET) * node_sz / (page_size  / 1024));
@@ -212,6 +241,11 @@ void *process_stdin(void *args) {
     char *substring;
     long pid;
 
+    printf("Available commands:\n"
+            "\tbind [pid]\n"
+            "\tunbind [pid]\n"
+            "\texit\n");
+
     while((fgets(command, MAX_COMMAND_SIZE, stdin) != NULL) && strcmp(command, "exit\n")) {
         if((substring = strtok(command, " ")) == NULL) {
             continue;
@@ -223,7 +257,7 @@ void *process_stdin(void *args) {
                 continue;
             }
             pid = strtol(substring, NULL, 10);
-            if((pid>0) && (pid<INT_MAX)) {
+            if((pid>0) && (pid<MAX_PID_N)) {
                 if(send_bind((int) pid)) {
                     printf("Bind request success (pid=%d).\n", (int) pid);
                 }
@@ -242,7 +276,7 @@ void *process_stdin(void *args) {
                 continue;
             }
             pid = strtol(substring, NULL, 10);
-            if((pid>0) && (pid<INT_MAX)) {
+            if((pid>0) && (pid<MAX_PID_N)) {
                 if(send_unbind((int) pid)) {
                     printf("Unbind request success (pid=%d).\n", (int) pid);
                 }
@@ -256,7 +290,12 @@ void *process_stdin(void *args) {
         }
 
         else {
-            fprintf(stderr, "Unknown command.\nAvailable commands:\n\tbind [pid]\n\tunbind [pid]\n\texit\n");
+            fprintf(stderr, "Unknown command.\n"
+                "Available commands:\n"
+                "\tbind [pid]\n"
+                "\tunbind [pid]\n"
+                "\texit\n");
+
         }
 
         //TODO: add console debug commands here
@@ -274,7 +313,7 @@ void *process_stdin(void *args) {
 void *process_socket(void *args) {
     // Unix domain socket
     struct sockaddr_un uds_addr;
-    int unix_fd, sel, rd;
+    int unix_fd, sel, acc, rd;
     req_t unix_req;
 
     struct timeval sel_timeout;
@@ -301,17 +340,18 @@ void *process_socket(void *args) {
         return NULL;
     }
 
-    FD_ZERO(&fd_s);
-    FD_SET(unix_fd, &fd_s);
-
     while(!exit_sig) {
         sel_timeout.tv_sec = SELECT_TIMEOUT;
 
+        FD_ZERO(&readfds);
+        FD_SET(unix_fd, &readfds);
         sel = select(unix_fd+1, &readfds, NULL, NULL, &sel_timeout);
+
         if (sel == -1) {
             fprintf(stderr, "Error in UDS select: %s.\n", strerror(errno));
             return NULL;
         } else if ((sel > 0) && FD_ISSET(unix_fd, &readfds)) {
+            printf("OKOK\n");
             if ((acc = accept(unix_fd, NULL, NULL)) == -1) {
                 fprintf(stderr, "Failed accepting incoming UDS connection: %s\n", strerror(errno));
                 continue;
@@ -351,6 +391,8 @@ void *process_socket(void *args) {
                 fprintf(stderr, "Unexpected amount of bytes read from accepted UD socket connection.\n");
             }
         }
+    }
+    unlink(UDS_path);
     return NULL;
 }
 
@@ -371,8 +413,6 @@ int main() {
         free(nlmh);
         return 1;
     }
-    configure_hdr();
-    configure_iov_mhdr();
 
     if(pthread_mutex_init(&comm_lock, NULL)) {
         fprintf(stderr, "Error creating communication mutex lock: %s\n", strerror(errno));
@@ -392,15 +432,16 @@ int main() {
         return 1;
     }
 
-    // if(pthread_create(&placement_thread, NULL, decide_placement, NULL)) {
-    //     fprintf(stderr, "Error spawning placement thread: %s\n", strerror(errno));
-    //     free(nlmh);
-    //     return 1;
-    // }
+    if(pthread_create(&placement_thread, NULL, decide_placement, NULL)) {
+        fprintf(stderr, "Error spawning placement thread: %s\n", strerror(errno));
+        free(nlmh);
+        return 1;
+    }
 
     pthread_join(stdin_thread, NULL);
+    printf("Exiting ctl...\n");
     pthread_join(socket_thread, NULL);
-    //pthread_join(placement_thread, NULL);
+    pthread_join(placement_thread, NULL);
 
     pthread_mutex_destroy(&comm_lock);
 

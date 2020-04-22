@@ -1,17 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-#include <string.h>
 
 #include <unistd.h>
 
-#define RAM_SIZE 128 // in GB
-#define WORKLOAD_PER 0.01
+#define RAM_SIZE 4 // in GB
+#define WORKLOAD_PER 0.5
 
 void access_array(int *array, size_t size, size_t page_size) {
     int var;
     for(size_t i=0; i<size; i+=page_size/sizeof(int)) {
-	//printf("i=%lu\n", i);
         array[i] = 1;	
     }
 }	
@@ -32,14 +30,7 @@ int main() {
     printf("End malloc\n");
     access_array(test_array, array_size/sizeof(int), page_size);
 
-    char r[4];
-    while(1) {
-        printf("Test complete. Type \"exit\" to clean up and exit\n");
-        scanf("%s", r);
-        if(!strcmp(r, "exit")) {
-            break;
-        }
-    }
+    getchar();
     free(test_array);
     return 0;
 }

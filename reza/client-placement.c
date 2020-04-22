@@ -1,11 +1,15 @@
 #include "placement.h"
 #include "client-placement.h"
 
+#include <numa.h>
+#include <numaif.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/mman.h>
 
 #include <errno.h>
 #include <unistd.h>
@@ -17,6 +21,25 @@ int bind_uds() {
     req_t bind_req;
 
     int pid = getpid();
+
+    // Keep process pages in primary memory (disables swapping for pages in a set of addresses)
+    // False-positive implicit function declaration on mlock2()
+    // #pragma GCC diagnostic push
+    // #pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
+    // if(mlock2(0, MAX_ADDRESS, MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT)) {
+    //     fprintf(stderr, "Error in mlock: %s\n", strerror(errno)); // Update /etc/security/limits.conf
+    //     return 0;
+    // }
+    // #pragma GCC diagnostic pop
+
+    struct bitmask *bm;
+    bm = numa_bitmask_alloc(1);
+    numa_bitmask_setbit(bm, DRAM_NODE);
+
+    if(set_mempolicy(MPOL_PREFERRED, bm->maskp, bm->size + 1)) {
+        fprintf(stderr, "Error in mbind: %s\n", strerror(errno));
+        return 0;
+    }
     
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));
@@ -29,6 +52,8 @@ int bind_uds() {
 
     if(connect(unix_fd, (struct sockaddr*)&uds_addr, sizeof(uds_addr))) {
         fprintf(stderr, "Error connecting to server via UDS: %s\n", strerror(errno));
+
+        close(unix_fd);
         return 0;
     }
 
@@ -43,9 +68,11 @@ int bind_uds() {
             fprintf(stderr, "Unexpected amount of bytes written to UDS fd.\n");
         }
 
+        close(unix_fd);
         return 0;
     }
 
+    close(unix_fd);
     return 1;
 }
 
@@ -57,6 +84,8 @@ int unbind_uds() {
     req_t unbind_req;
 
     int pid = getpid();
+
+    // munlock(0, MAX_ADDRESS);
     
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));
@@ -69,6 +98,8 @@ int unbind_uds() {
 
     if(connect(unix_fd, (struct sockaddr*)&uds_addr, sizeof(uds_addr))) {
         fprintf(stderr, "Error connecting to server via UDS: %s\n", strerror(errno));
+
+        close(unix_fd);
         return 0;
     }
 
@@ -83,22 +114,11 @@ int unbind_uds() {
             fprintf(stderr, "Unexpected amount of bytes written to UDS fd.\n");
         }
 
+
+        close(unix_fd);
         return 0;
     }
 
+    close(unix_fd);
     return 1;
-}
-
-
-int main() {
-    int a;
-    if(!bind_uds((unsigned long) &a,(unsigned long) &a + 100)) {
-        return 1;
-    }
-    printf("BIND OK\n");
-    if(!unbind_uds()) {
-        return 1;
-    }
-    printf("UNBIND OK\n");
-    return 0;
 }

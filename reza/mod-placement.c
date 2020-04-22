@@ -40,8 +40,6 @@ MODULE_DESCRIPTION("Memory Access Monitor");
 MODULE_VERSION("0.3");
 MODULE_INFO(vermagic, "5.6.3-patched SMP mod_unload modversions ");
 
-#define DAEMON_NAME "placement_daemon"
-
 struct sock *nl_sock;
 
 addr_info_t *found_addrs;
@@ -62,16 +60,23 @@ int kept_pages = 0; // Used so that NVRAM find requests do not occur when it is 
 
 static int find_target_process(pid_t pid) {  // to find the task struct by process_name or pid
     if(n_pids > MAX_PIDS) {
-        printk(KERN_INFO "PLACEMENT: Managed PIDs at capacity.");
-        return -1;
+        pr_info("PLACEMENT: Managed PIDs at capacity.\n");
+        return 0;
+    }
+    int i;
+    for(i=0; i < n_pids; i++) {
+        if(task_item[i]->pid == pid) {
+            pr_info("PLACEMENT: Already managing given PID.\n");
+            return 0;
+        }
     }
     for_each_process(task_item[n_pids]) {
         if (task_item[n_pids]->pid == pid) {
             n_pids++;
-            return 0;
+            return 1;
         }
     }
-    return -1;
+    return 0;
 }
 
 static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next,
@@ -148,6 +153,8 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
 }
 
 static int do_page_walk(int mode, int n) {
+    pr_info("OK1\n");
+
     struct mm_struct *mm;
     struct mm_walk_ops mem_walk_ops = {
             .pte_entry = pte_callback_dram,
@@ -159,10 +166,14 @@ static int do_page_walk(int mode, int n) {
         mem_walk_ops.pte_entry = pte_callback_nvram;
     }
 
+    pr_info("OK2\n");
+
     n_to_find = n;
     int n_cycles;
-    for(n_cycles = 0; n_cycles < MAX_CYCLES; n_cycles++) {
+    for(n_cycles = 0; (n_cycles < MAX_CYCLES) && (n_pids > 0); n_cycles++) {
         int i;
+
+        pr_info("OK4\n");
         
         // begin cycle at last_pid->last_addr
         mm = task_item[last_pid]->mm;
@@ -171,6 +182,8 @@ static int do_page_walk(int mode, int n) {
         if(n_found >= n_to_find) {
             return 0;
         }
+
+        pr_info("OK3\n");
 
         for(i = last_pid+1; i < n_pids; i++) {
 
@@ -211,21 +224,21 @@ static int do_page_walk(int mode, int n) {
 
 static int bind_pid(pid_t pid) {
     if((pid <= 0) || (pid > MAX_PID_N)) {
-        printk(KERN_INFO "PLACEMENT: Invalid pid value in bind command.\n");
+        pr_info("PLACEMENT: Invalid pid value in bind command.\n");
         return -1;
     }
     if (!find_target_process(pid)) {
-        printk(KERN_INFO "PLACEMENT: Could not bind pid=%d!\n", pid);
+        pr_info("PLACEMENT: Could not bind pid=%d.\n", pid);
         return -1;
     }
 
-    printk(KERN_INFO "PLACEMENT: Bound pid=%d!\n", pid);
+    pr_info("PLACEMENT: Bound pid=%d.\n", pid);
     return 0;
 }
 
 static int unbind_pid(pid_t pid) {
     if((pid <= 0) || (pid > MAX_PID_N)) {
-        printk(KERN_INFO "PLACEMENT: Invalid pid value in unbind command.\n");
+        pr_info("PLACEMENT: Invalid pid value in unbind command.\n");
         return -1;
     }
 
@@ -238,17 +251,29 @@ static int unbind_pid(pid_t pid) {
     }
 
     if(i == n_pids) {
-        printk(KERN_INFO "PLACEMENT: Could not unbind pid=%d!\n", pid);
+        pr_info("PLACEMENT: Could not unbind pid=%d.\n", pid);
         return -1;
+    }
+
+    if(last_pid > i) {
+        last_pid--;
+    }
+    else if(last_pid == i) {
+        last_addr = 0;
+
+        if(last_pid == (n_pids-1)) {
+            last_pid = 0;
+        }
     }
 
     // Shift left all subsequent entries
     int j;
-    for(j = i; j < n_pids; j++) {
+    for(j = i; j < n_pids-1; j++) {
         task_item[j] = task_item[j+1];
     }
     n_pids--;
 
+    pr_info("PLACEMENT: Unbound pid=%d.\n", pid);
     return 0;
 }
 
@@ -261,12 +286,12 @@ FIND [tier] [n]
 */
 static void process_req(req_t *req) {
     int ret = -1;
-
+    n_found = 0;
     if(req != NULL) {
-        n_found = 0;
         switch(req->op_code) {
             case FIND_OP:
                 ret = do_page_walk(req->mode, req->pid_n);
+                pr_info("PLACEMENT: Found %d pages.\n", n_found);
                 break;
             case BIND_OP:
                 ret = bind_pid(req->pid_n);
@@ -276,7 +301,7 @@ static void process_req(req_t *req) {
                 break;
 
             default:
-                printk(KERN_INFO "PLACEMENT: Unrecognized opcode!\n");
+                pr_info("PLACEMENT: Unrecognized opcode.\n");
         }
     }
 
@@ -301,10 +326,11 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     process_req(in_req);
 
+    pr_info("PLACEMENT: Sending array with %d entries.\n", n_found);
     msg_size = sizeof(addr_info_t) * n_found;
     skb_out = nlmsg_new(msg_size, 0);
     if (!skb_out) {
-        printk(KERN_ERR "Failed to allocate new skb.\n");
+        pr_err("Failed to allocate new skb.\n");
         return;
     }
 
@@ -313,14 +339,13 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
     memcpy(NLMSG_DATA(nlmh), found_addrs, msg_size);
 
     if ((res = nlmsg_unicast(nl_sock, skb_out, sender_pid)) < 0) {
-        printk(KERN_INFO "PLACEMENT: Error sending bak to user.\n");
+        pr_info("PLACEMENT: Error sending bak to user.\n");
     }
-
 }
 
 
 static int __init _on_module_init(void) {
-    printk(KERN_INFO "PLACEMENT: Hello from module!\n");
+    pr_info("PLACEMENT: Hello from module!\n");
 
     last_addr = 0;
     last_pid = 0;
@@ -333,7 +358,7 @@ static int __init _on_module_init(void) {
 
     nl_sock = netlink_kernel_create(&init_net, NETLINK_USER, &cfg);
     if (!nl_sock) {
-        printk(KERN_ALERT "PLACEMENT: Error creating netlink socket.\n");
+        pr_alert("PLACEMENT: Error creating netlink socket.\n");
         return 1;
     }
 

@@ -42,13 +42,18 @@ typedef struct req {
 
 //Client-ctl comms:
 #define PORT 8080
+#define SELECT_TIMEOUT 1
 
 // Misc:
 #define MAX_COMMAND_SIZE 80
 #define DRAM_TARGET 0.9
 #define DRAM_THRESH 0.05
 #define MEMCHECK_INTERVAL 4
+
+
+// Memory ranges: (64-bit systems only use 48-bit)
 #define IS_64BIT (sizeof(void*) == 8)
-#define MAX_ADDRESS (IS_64BIT ? 140737488355328 : 3221225472) // Max user-space addresses: 64-bit=0-0x7fffffffffff, 32-bit=0xbfffffff
+#define MAX_ADDRESS (0x40000000000UL)
+//#define MAX_ADDRESS (IS_64BIT ? (0x800000000000UL) : (0xC0000000UL)) // Max user-space addresses: 48-bit=0-0x7fffffffffff, 32-bit=0xbfffffff
 
 #endif
