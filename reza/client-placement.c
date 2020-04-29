@@ -37,7 +37,7 @@ int bind_uds() {
     numa_bitmask_setbit(bm, DRAM_NODE);
 
     if(set_mempolicy(MPOL_PREFERRED, bm->maskp, bm->size + 1)) {
-        fprintf(stderr, "Error in mbind: %s\n", strerror(errno));
+        fprintf(stderr, "Error in set_mempolicy: %s\n", strerror(errno));
         return 0;
     }
     

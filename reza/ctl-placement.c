@@ -18,38 +18,28 @@
 #include <limits.h>
 #include <errno.h>
 
-struct sockaddr_nl src_addr, dst_addr;
-struct nlmsghdr *nlmh;
-struct iovec iov;
 int netlink_fd;
-struct msghdr msg;
 
 long page_size;
 
-int do_NVRAM_DRAM = 0;
+struct sockaddr_nl src_addr, dst_addr;
+struct nlmsghdr *nlmh_out;//, *nlmh_in;
+
+char *buffer;
+int buf_size;
+
+addr_info_t *candidates;
+
+struct iovec iov_out, iov_in;
+struct msghdr msg_out, msg_in;
 
 volatile int exit_sig = 0;
 
-pthread_t stdin_thread, socket_thread, placement_thread;
-pthread_mutex_t comm_lock;
+pthread_t stdin_thread, socket_thread, threshold_thread, switch_thread;
+pthread_mutex_t comm_lock, placement_lock;
 
-void configure_iov_mhdr() {
-    iov.iov_base = (void *)nlmh;
-    iov.iov_len = nlmh->nlmsg_len;
-    msg.msg_name = (void *) &dst_addr;
-    msg.msg_namelen = sizeof(dst_addr);
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-}
-
-void configure_hdr() {
-    memset(nlmh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-    nlmh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
-    nlmh->nlmsg_pid = getpid();
-    nlmh->nlmsg_flags = 0;
-}
-
-void configure_addrs() {
+void configure_netlink_addr() {
+    /* Source and destination addresses config */
     // source address
     memset(&src_addr, 0, sizeof(src_addr));
     src_addr.nl_family = AF_NETLINK;
@@ -63,23 +53,66 @@ void configure_addrs() {
     dst_addr.nl_groups = 0; // unicast
 }
 
-addr_info_t *send_req(req_t req) {
-    addr_info_t *resp;
+void configure_netlink_outbound() {
+    
+    /* netlink message header config */
+    nlmh_out->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+    nlmh_out->nlmsg_pid = getpid();
+    nlmh_out->nlmsg_flags = 0;
+
+    /* IO vector out config */
+    iov_out.iov_base = (void *) nlmh_out;
+    iov_out.iov_len = nlmh_out->nlmsg_len;
+
+    /* message header outconfig */
+    msg_out.msg_name = (void *) &dst_addr;
+    msg_out.msg_namelen = sizeof(dst_addr);
+    msg_out.msg_iov = &iov_out;
+    msg_out.msg_iovlen = 1;
+}
+
+void configure_netlink_inbound() {
+
+    /* IO vector in config */
+    iov_in.iov_base = (void *) buffer;
+    iov_in.iov_len = buf_size;
+    
+    /* message header in config */
+    msg_in.msg_name = (void *) &dst_addr;
+    msg_in.msg_namelen = sizeof(dst_addr);
+    msg_in.msg_iov = &iov_in;
+    msg_in.msg_iovlen = 1;
+}
+
+int send_req(req_t req, addr_info_t **out) {
 
     pthread_mutex_lock(&comm_lock);
+    
+    memset(NLMSG_DATA(nlmh_out), 0, MAX_PAYLOAD);
+    memcpy(NLMSG_DATA(nlmh_out), &req, sizeof(req));
+    sendmsg(netlink_fd, &msg_out, 0);
 
-    configure_hdr();
-    configure_iov_mhdr();
+    //configure_netlink_inbound();
+    memset(buffer, 0, buf_size);
+    int len = recvmsg(netlink_fd, &msg_in, 0);
 
-    memcpy(NLMSG_DATA(nlmh), &req, sizeof(req_t));
-    sendmsg(netlink_fd, &msg, 0);
-    recvmsg(netlink_fd, &msg, 0);
+    addr_info_t *curr_pointer = *out;
+    int i = 0;
+    struct nlmsghdr * curr_nlmh;
+    for (curr_nlmh = (struct nlmsghdr *) buffer; NLMSG_OK(curr_nlmh, len); curr_nlmh = NLMSG_NEXT(curr_nlmh, len)) {
+        if(curr_nlmh->nlmsg_type == NLMSG_ERROR) {
+            pthread_mutex_unlock(&comm_lock);
+            return 0;
+        }
+        int payload_len = NLMSG_PAYLOAD(curr_nlmh, 0);
+        memcpy(curr_pointer, (addr_info_t *) NLMSG_DATA(curr_nlmh), payload_len);
+        curr_pointer += payload_len/sizeof(addr_info_t);
+        i++;
 
-    resp = (addr_info_t *) NLMSG_DATA(nlmh);
-
+    }
+    //printf("Received a total of %d packets.\n", i);
     pthread_mutex_unlock(&comm_lock);
-
-    return resp;
+    return 1;
 }
 
 // void print_command(char *cmd) {
@@ -111,61 +144,38 @@ addr_info_t *send_req(req_t req) {
 
 int send_bind(int pid) {
     req_t req;
-    addr_info_t *op_retval;
+    addr_info_t *op_retval = malloc(sizeof(addr_info_t));
 
     req.op_code = BIND_OP;
     req.pid_n = pid;
 
-
-    op_retval = send_req(req);
+    send_req(req, &op_retval);
     if(op_retval->pid_retval == 0) {
+        free(op_retval);
         return 1;
     }
+    free(op_retval);
     return 0;
 }
 
 int send_unbind(int pid) {
     req_t req;
-    addr_info_t *op_retval;
+    addr_info_t *op_retval = malloc(sizeof(addr_info_t));
 
     req.op_code = UNBIND_OP;
     req.pid_n = pid;
 
-    op_retval = send_req(req);
+    send_req(req, &op_retval);
     if(op_retval->pid_retval == 0) {
+        free(op_retval);
         return 1;
     }
+    free(op_retval);
     return 0;
 }
 
-int send_find(int n_pages, int mode) {
-    req_t req;
-    addr_info_t *candidates; // contains candidate pages that result from a find command
-
-    req.op_code = FIND_OP;
-    req.pid_n = n_pages;
-    req.mode = mode;
-
-    
-    candidates = send_req(req);
-
-    int n_found=-1;
-    int n_migrated=0;
-
-    while(candidates[++n_found].pid_retval > 0);
-
-    int dest_node = DRAM_NODE;
-    if(mode == DRAM_MODE) {
-        dest_node = NVRAM_NODE;
-
-        if(candidates[n_found].pid_retval == -2) {
-            do_NVRAM_DRAM = 0;
-        }
-    }
-
-    if(n_found == 0) {
-        return 0;
-    }
+int do_migration(int dest_node, int n_found) {
+    int n_migrated = 0;
 
     void **addr = malloc(sizeof(unsigned long) * n_found);
     int *dest_nodes = malloc(sizeof(int *) * n_found);
@@ -185,22 +195,98 @@ int send_find(int n_pages, int mode) {
         }
 
         if(numa_move_pages(curr_pid, (unsigned long) j, addr, dest_nodes, status, 0)) {
-            free(addr);
-            free(dest_nodes);
-            free(status);
-            return n_migrated;
+            break;
         }
         n_migrated += j;
     }
-
     free(addr);
     free(dest_nodes);
     free(status);
-
-    return n_found;
+    return n_migrated;
 }
 
-void *decide_placement(void *args) {
+int do_switch(int n_found) {
+    int n_switched = 0;
+    void **addr = malloc(sizeof(unsigned long));
+    int *dest_node = malloc(sizeof(int *));
+    int *status = malloc(sizeof(int *));
+    int pid;
+
+    status[0] = -123;
+
+    for(int i=0; i<n_found; i++) {
+        // alternate migrations to prevent reaching 100% usage in either node.
+        pid = candidates[i+n_found+1].pid_retval;
+        addr[0] = (void *) candidates[i+n_found+1].addr;
+        dest_node[0] = NVRAM_NODE;
+        if(numa_move_pages(pid, 1, addr, dest_node, status, 0)) {
+            printf("Failed migration to nvram::%d:%p\n", pid, addr[0]);
+            break;
+        }
+        pid = candidates[i].pid_retval;
+        addr[0] = (void *) candidates[i].addr;
+        dest_node[0] = DRAM_NODE;
+        if(numa_move_pages(pid, 1, addr, dest_node, status, 0)) {
+            printf("Failed migration to dram::%d:%p\n", pid, addr[0]);
+            break;
+        }
+        n_switched++;
+    }
+    free(addr);
+    free(dest_node);
+    free(status);
+    return n_switched;
+}
+
+int send_find(int n_pages, int mode) {
+    req_t req;
+
+    req.op_code = FIND_OP;
+    req.pid_n = n_pages;
+    req.mode = mode;
+
+    
+    send_req(req, &candidates);
+
+    int n_found=-1;
+
+    while(candidates[++n_found].pid_retval > 0);
+
+    if(n_found == 0) {
+        return 0;
+    }
+    int dest_node;
+    switch(mode) {
+        case DRAM_MODE:
+            dest_node = NVRAM_NODE;
+            return do_migration(dest_node, n_found);
+            break;
+        case NVRAM_MODE:
+            dest_node = DRAM_NODE;
+            return do_migration(dest_node, n_found);
+            break;
+        case SWITCH_MODE:
+            return do_switch(n_found);
+            break;
+    }
+    return 0;
+}
+
+void *switch_placement(void *args) {
+    while(!exit_sig) {
+        pthread_mutex_lock(&placement_lock);
+        int n_switched = send_find(MAX_N_SWITCH, SWITCH_MODE);
+        if(n_switched > 0) {
+            printf("DRAM<->NVRAM: Switched %d out of %d pages.\n", n_switched, (int) MAX_N_SWITCH);
+        }
+        pthread_mutex_unlock(&placement_lock);
+        sleep(SWITCH_INTERVAL);
+    }
+
+    return NULL;
+}
+
+void *threshold_placement(void *args) {
     long long node_sz;
     long long node_fr = 1;
     float usage;
@@ -211,25 +297,27 @@ void *decide_placement(void *args) {
         usage = 1.0 * (node_sz - node_fr) / node_sz;
 
         printf("Current DRAM Usage: %0.2f%%\n", usage*100);
-
-        if(usage > (DRAM_TARGET+DRAM_THRESH)) {
-            n_pages = ceil((usage - DRAM_TARGET) * node_sz / (page_size  / 1024));
+        pthread_mutex_lock(&placement_lock);
+        if(usage > (DRAM_TARGET+DRAM_THRESH_PLUS)) {
+            int n_bytes = (usage - DRAM_TARGET) * node_sz;
+            n_pages = ceil(n_bytes/page_size);
             n_pages = fmin(n_pages, MAX_N_FIND);
             int n_migrated = send_find(n_pages, DRAM_MODE);
-
             if(n_migrated > 0) {
-                do_NVRAM_DRAM = 1;
+                printf("DRAM-NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
             }
-            printf("DRAM-NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
         }
 
-        else if(do_NVRAM_DRAM && (usage < (DRAM_TARGET-DRAM_THRESH))) {
-            n_pages = ceil((DRAM_TARGET - usage) * node_sz / (page_size  / 1024));
+        else if(usage < (DRAM_TARGET-DRAM_THRESH_NEGATIVE)) {
+            int n_bytes = (DRAM_TARGET - usage) * node_sz;
+            n_pages = ceil(n_bytes/page_size);
             n_pages = fmin(n_pages, MAX_N_FIND);
             int n_migrated = send_find(n_pages, NVRAM_MODE);
-            printf("NVRAM-DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+            if(n_migrated > 0) {
+                printf("NVRAM-DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+            }
         }
-
+        pthread_mutex_unlock(&placement_lock);
         sleep(MEMCHECK_INTERVAL);
     }
 
@@ -351,7 +439,6 @@ void *process_socket(void *args) {
             fprintf(stderr, "Error in UDS select: %s.\n", strerror(errno));
             return NULL;
         } else if ((sel > 0) && FD_ISSET(unix_fd, &readfds)) {
-            printf("OKOK\n");
             if ((acc = accept(unix_fd, NULL, NULL)) == -1) {
                 fprintf(stderr, "Failed accepting incoming UDS connection: %s\n", strerror(errno));
                 continue;
@@ -402,51 +489,71 @@ int main() {
         fprintf(stderr, "Could not create netlink socket fd: %s\nTry inserting kernel module first.\n", strerror(errno));
         return 1;
     }
-
-    nlmh = malloc(NLMSG_SPACE(MAX_PAYLOAD));
     page_size = sysconf(_SC_PAGESIZE);
+    int packet_size = NLMSG_SPACE(MAX_PAYLOAD);
+    buf_size = packet_size * MAX_PACKETS;
 
-    configure_addrs();
+    candidates = malloc(sizeof(addr_info_t) * MAX_N_FIND);
+
+    buffer = malloc(buf_size);
+
+    nlmh_out = malloc(packet_size);
+
+    configure_netlink_addr();
+    configure_netlink_outbound();
+    configure_netlink_inbound();
 
     if(bind(netlink_fd, (struct sockaddr *) &src_addr, sizeof(src_addr))) {
         printf("Error binding netlink socket fd: %s\n", strerror(errno));
-        free(nlmh);
+        free(candidates);
+        free(buffer);
+        free(nlmh_out);
         return 1;
     }
 
     if(pthread_mutex_init(&comm_lock, NULL)) {
         fprintf(stderr, "Error creating communication mutex lock: %s\n", strerror(errno));
-        free(nlmh);
-        return 1;
+    }
+
+    else if(pthread_mutex_init(&placement_lock, NULL)) {
+        fprintf(stderr, "Error creating placement mutex lock: %s\n", strerror(errno));
     }
     
-    if(pthread_create(&stdin_thread, NULL, process_stdin, NULL)) {
+    else if(pthread_create(&stdin_thread, NULL, process_stdin, NULL)) {
         fprintf(stderr, "Error spawning stdin thread: %s\n", strerror(errno));
-        free(nlmh);
-        return 1;
     }
 
-    if(pthread_create(&socket_thread, NULL, process_socket, NULL)) {
+    else if(pthread_create(&socket_thread, NULL, process_socket, NULL)) {
         fprintf(stderr, "Error spawning socket thread: %s\n", strerror(errno));
-        free(nlmh);
-        return 1;
     }
 
-    if(pthread_create(&placement_thread, NULL, decide_placement, NULL)) {
-        fprintf(stderr, "Error spawning placement thread: %s\n", strerror(errno));
-        free(nlmh);
-        return 1;
+    else if(pthread_create(&threshold_thread, NULL, threshold_placement, NULL)) {
+        fprintf(stderr, "Error spawning thresold placement thread: %s\n", strerror(errno));
     }
 
-    pthread_join(stdin_thread, NULL);
-    printf("Exiting ctl...\n");
-    pthread_join(socket_thread, NULL);
-    pthread_join(placement_thread, NULL);
+    else if(pthread_create(&switch_thread, NULL, switch_placement, NULL)) {
+        fprintf(stderr, "Error spawning switch thread: %s\n", strerror(errno));
+    }
 
-    pthread_mutex_destroy(&comm_lock);
+    else {
+        pthread_join(stdin_thread, NULL);
+        printf("Exiting ctl...\n");
+        pthread_join(socket_thread, NULL);
+        pthread_join(threshold_thread, NULL);
+        pthread_join(switch_thread, NULL);
 
+        pthread_mutex_destroy(&comm_lock);
+        pthread_mutex_destroy(&placement_lock);
+
+        close(netlink_fd);
+        free(candidates);
+        free(buffer);
+        free(nlmh_out);
+        return 0;
+    }
     close(netlink_fd);
-
-    free(nlmh);
-    return 0;
+    free(candidates);
+    free(buffer);
+    free(nlmh_out);
+    return 1;
 }

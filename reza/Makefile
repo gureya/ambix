@@ -32,5 +32,6 @@ force-remove:
 ctl: ctl-placement.c
 	${CC} ${CFLAGS} -o ctl-placement.o ctl-placement.c
 
-client: client.c client-placement.c
+client: client.c client_2.c client-placement.c
 	${CC} ${CFLAGS} -o client.o client-placement.c client.c
+	${CC} ${CFLAGS} -o client_2.o client-placement.c client_2.c

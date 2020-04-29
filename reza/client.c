@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "client-placement.h"
 
 
@@ -8,9 +9,9 @@ int main() {
     }
     printf("BIND OK\n");
 
-    int a[200];
+    int *a = malloc(sizeof(int) * 90000000);
 
-    for(int i=0; i<50; i++) {
+    for(int i=0; i<90000000; i++) {
         a[i] = 1;
     }
 

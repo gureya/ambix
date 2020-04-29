@@ -7,8 +7,9 @@
 // Find-related constants:
 #define DRAM_MODE 0
 #define NVRAM_MODE 1
-#define MAX_N_FIND 256 //262144 // Find up to 1GB of pages
-#define MAX_CYCLES 2
+#define SWITCH_MODE 2
+#define MAX_N_FIND MAX_N_PER_PACKET * MAX_PACKETS - 1 // Amount of pages that fit in exactly MAX_PACKETS netlink packets making space for retval struct (end struct)
+#define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
 
 // Node definition:
@@ -17,7 +18,10 @@
 
 // Netlink:
 #define NETLINK_USER 31
-#define MAX_PAYLOAD 4096 // Theoretical max is 32KB - netlink header - padding
+#define MAX_PAYLOAD 4096 // Theoretical max is 32KB - netlink header - padding but limiting payload to 4096 or page size is standard in kernel programming
+#define MAX_PACKETS 512
+#define MAX_N_PER_PACKET (MAX_PAYLOAD/sizeof(addr_info_t)) // Currently 1MB of pages
+
 
 // Unix Domain Socket:
 #define UDS_path "./socket"
@@ -46,14 +50,16 @@ typedef struct req {
 
 // Misc:
 #define MAX_COMMAND_SIZE 80
-#define DRAM_TARGET 0.9
-#define DRAM_THRESH 0.05
-#define MEMCHECK_INTERVAL 4
+#define DRAM_TARGET 0.95
+#define DRAM_THRESH_PLUS 0.03
+#define DRAM_THRESH_NEGATIVE 0.05
+#define MEMCHECK_INTERVAL 2
+#define SWITCH_INTERVAL 3
 
 
 // Memory ranges: (64-bit systems only use 48-bit)
 #define IS_64BIT (sizeof(void*) == 8)
-#define MAX_ADDRESS (0x40000000000UL)
-//#define MAX_ADDRESS (IS_64BIT ? (0x800000000000UL) : (0xC0000000UL)) // Max user-space addresses: 48-bit=0-0x7fffffffffff, 32-bit=0xbfffffff
+#define MAX_ADDRESS (IS_64BIT ? 0xFFFF880000000000UL : 0xC0000000UL) // Max user-space addresses for the x86 architecture
+#define MAX_ADDRESS_ARM (IS_64BIT ? 0x800000000000UL : 0xC0000000UL) // Max user-space addresses for the ARM architecture
 
 #endif
