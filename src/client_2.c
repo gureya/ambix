@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "client-placement.h"
+#include "pnp-client.h"
 
 
 int main() {

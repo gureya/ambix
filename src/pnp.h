@@ -1,5 +1,5 @@
-#ifndef _PLACEMENT_H
-#define _PLACEMENT_H
+#ifndef _PNP_H
+#define _PNP_H
 
 #define MAX_PIDS 20
 #define MAX_PID_N 32768 // default max pid number in /proc/sys/kernel/pid_max
@@ -12,9 +12,9 @@
 #define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
 
-// Node definition:
-#define DRAM_NODE 0
-#define NVRAM_NODE 1
+// Node definition: DRAM node id must always be a lower value than NVRAM node id due to the memory policy set in client-placement.c
+#define DRAM_NODE 2
+#define NVRAM_NODE 3
 
 // Netlink:
 #define NETLINK_USER 31
@@ -51,8 +51,8 @@ typedef struct req {
 // Misc:
 #define MAX_COMMAND_SIZE 80
 #define DRAM_TARGET 0.95
-#define DRAM_THRESH_PLUS 0.03
-#define DRAM_THRESH_NEGATIVE 0.05
+#define DRAM_THRESH_PLUS 0.01
+#define DRAM_THRESH_NEGATIVE 0.15
 #define MEMCHECK_INTERVAL 2
 #define SWITCH_INTERVAL 3
 

@@ -1,4 +1,4 @@
-#include "placement.h"
+#include "clockdwf.h"
 
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -304,7 +304,7 @@ void *threshold_placement(void *args) {
             n_pages = fmin(n_pages, MAX_N_FIND);
             int n_migrated = send_find(n_pages, DRAM_MODE);
             if(n_migrated > 0) {
-                printf("DRAM-NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+                printf("DRAM->NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
             }
         }
 
@@ -314,7 +314,7 @@ void *threshold_placement(void *args) {
             n_pages = fmin(n_pages, MAX_N_FIND);
             int n_migrated = send_find(n_pages, NVRAM_MODE);
             if(n_migrated > 0) {
-                printf("NVRAM-DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+                printf("NVRAM->DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
             }
         }
         pthread_mutex_unlock(&placement_lock);

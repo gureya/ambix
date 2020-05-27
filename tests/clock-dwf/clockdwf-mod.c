@@ -33,7 +33,7 @@
 #include <linux/mmzone.h> // Contains conversion between pfn and node id (NUMA node)
 
 #include <linux/string.h>
-#include "placement.h"
+#include "clockdwf.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
@@ -86,7 +86,7 @@ static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next
                         struct mm_walk *walk) {
 
     // If already found n pages, page is not present or page is not in DRAM node
-    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || (pfn_to_nid(pte_pfn(*ptep)) != DRAM_NODE)) {
+    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || (pfn_to_nid(pte_pfn(*ptep)) == NVRAM_NODE)) {
         if((n_found == n_to_find) && !found_last) { // found all + last
             last_addr_dram = addr;
             found_last = 1;
@@ -157,16 +157,34 @@ static int pte_callback_perfect_nvram(pte_t *ptep, unsigned long addr, unsigned 
 
     return 0;
 }
+
+static int pte_callback_write_prot(pte_t *ptep, unsigned long addr, unsigned long next,
+                        struct mm_walk *walk) {
+
+    // If already found n pages, page is not present or page is not in NVRAM node
+    if((ptep == NULL) || !pte_present(*ptep) || !pte_write(*ptep) || (pfn_to_nid(pte_pfn(*ptep)) != NVRAM_NODE)) {
+        return 0;
+    }
+
+    pte_t old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
+    *ptep = pte_wrprotect(old_pte); // unset modified bit
+    ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, *ptep);
+    return 0;
+}
+
+
 static int do_page_walk(int n_cycles, struct mm_walk_ops mem_walk_ops, int last_pid, int last_addr) {
-    struct mm_struct *mm;
+struct mm_struct *mm;
     int i;
     for(i = 0; (i < n_cycles) && (n_pids > 0); i++) {
         int j;
         
         // begin cycle at last_pid->last_addr
         mm = task_items[last_pid]->mm;
+        spin_lock(&mm->page_table_lock);
         curr_pid = task_items[last_pid]->pid;
         walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
+        spin_unlock(&mm->page_table_lock);
         if(n_found >= n_to_find) {
             break;
         }
@@ -174,8 +192,10 @@ static int do_page_walk(int n_cycles, struct mm_walk_ops mem_walk_ops, int last_
         for(j=last_pid+1; j<n_pids; j++) {
 
             mm = task_items[j]->mm;
+            spin_lock(&mm->page_table_lock);
             curr_pid = task_items[j]->pid;
             walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+            spin_unlock(&mm->page_table_lock);
             if(n_found >= n_to_find) {
                 return j;
             }
@@ -183,8 +203,10 @@ static int do_page_walk(int n_cycles, struct mm_walk_ops mem_walk_ops, int last_
 
         for(j = 0; j < last_pid-1; j++) {
             mm = task_items[j]->mm;
+            spin_lock(&mm->page_table_lock);
             curr_pid = task_items[j]->pid;
             walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+            spin_unlock(&mm->page_table_lock);
             if(n_found >= n_to_find) {
                 return j;
             }
@@ -192,8 +214,10 @@ static int do_page_walk(int n_cycles, struct mm_walk_ops mem_walk_ops, int last_
 
         // finish cycle at last_pid->last_addr
         mm = task_items[last_pid]->mm;
+        spin_lock(&mm->page_table_lock);
         curr_pid = task_items[last_pid]->pid;
         walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
+        spin_unlock(&mm->page_table_lock);
         if(n_found >= n_to_find) {
             break;
         }

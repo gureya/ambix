@@ -1,5 +1,4 @@
-#include "placement.h"
-#include "client-placement.h"
+#include "pnp.h"
 
 #include <numa.h>
 #include <numaif.h>
@@ -33,10 +32,12 @@ int bind_uds() {
     // #pragma GCC diagnostic pop
 
     struct bitmask *bm;
-    bm = numa_bitmask_alloc(1);
+    int ncpus = numa_num_configured_cpus();
+    bm = numa_bitmask_alloc(ncpus);
     numa_bitmask_setbit(bm, DRAM_NODE);
+    numa_bitmask_setbit(bm, NVRAM_NODE);
 
-    if(set_mempolicy(MPOL_PREFERRED, bm->maskp, bm->size + 1)) {
+    if(set_mempolicy(MPOL_BIND, bm->maskp, bm->size + 1)) {
         fprintf(stderr, "Error in set_mempolicy: %s\n", strerror(errno));
         return 0;
     }

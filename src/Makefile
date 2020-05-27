@@ -2,7 +2,7 @@ CONFIG_MODULE_SIG=n
 CC = gcc
 CFLAGS = -Wall -lnuma -pthread -lm
 
-MODULE_FILENAME=mod-placement
+MODULE_FILENAME=pnp-mod
 obj-m +=  $(MODULE_FILENAME).o
 KO_FILE=$(MODULE_FILENAME).ko
 
@@ -10,7 +10,7 @@ export KROOT=/lib/modules/$(shell uname -r)/build
 
 all: ctl client module
 
-module:
+module: pnp-mod.c pnp.h
 	@$(MAKE) -C $(KROOT) M=$(PWD) modules -j 12
 
 module_install:
@@ -29,9 +29,9 @@ remove:
 force-remove:
 	sudo rmmod -f $(MODULE_FILENAME)
 
-ctl: ctl-placement.c
-	${CC} ${CFLAGS} -o ctl-placement.o ctl-placement.c
+ctl: pnp-ctl.c pnp.h
+	${CC} ${CFLAGS} -o pnp-ctl.o pnp-ctl.c
 
-client: client.c client_2.c client-placement.c
-	${CC} ${CFLAGS} -o client.o client-placement.c client.c
-	${CC} ${CFLAGS} -o client_2.o client-placement.c client_2.c
+client: client.c client_2.c pnp-client.c pnp.h
+	${CC} ${CFLAGS} -o client.o pnp-client.c client.c
+	${CC} ${CFLAGS} -o client_2.o pnp-client.c client_2.c
