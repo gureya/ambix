@@ -61,6 +61,18 @@ int n_to_find = 0;
 int n_found = 0;
 int found_last = 0;
 
+
+
+/*
+-------------------------------------------------------------------------------
+
+HELPER FUNCTIONS
+
+-------------------------------------------------------------------------------
+*/
+
+
+
 static int find_target_process(pid_t pid) {  // to find the task struct by process_name or pid
     if(n_pids > MAX_PIDS) {
         pr_info("PLACEMENT: Managed PIDs at capacity.\n");
@@ -79,14 +91,83 @@ static int find_target_process(pid_t pid) {  // to find the task struct by proce
             return 1;
         }
     }
+
     return 0;
 }
+
+static int update_pid_list(int i) {
+    if(last_pid_dram > i) {
+        last_pid_dram--;
+    }
+    else if(last_pid_dram == i) {
+        last_addr_dram = 0;
+
+        if(last_pid_dram == (n_pids-1)) {
+            last_pid_dram = 0;
+        }
+    }
+
+    if(last_pid_nvram > i) {
+        last_pid_nvram--;
+    }
+    else if(last_pid_nvram == i) {
+        last_addr_nvram = 0;
+
+        if(last_pid_nvram == (n_pids-1)) {
+            last_pid_nvram = 0;
+        }
+    }
+
+    // Shift left all subsequent entries
+    int j;
+    for(j = i; j < (n_pids - 1); j++) {
+        task_items[j] = task_items[j+1];
+    }
+    n_pids--;
+
+    return 0;
+}
+
+static int refresh_pids(void) {
+    int i;
+
+    for(i=0; i < n_pids; i++) {
+        int pid = task_items[i]->pid;
+        int found = 0;
+
+        for_each_process(task_items[i]) {
+            if (task_items[i]->pid == pid) {
+                found = 1;
+                break;
+            }
+        }
+
+        if(!found) {
+            update_pid_list(i);
+        }
+
+    }
+
+    return 0;
+}
+
+
+
+/*
+-------------------------------------------------------------------------------
+
+CALLBACK FUNCTIONS
+
+-------------------------------------------------------------------------------
+*/
+
+
 
 static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
 
     // If already found n pages, page is not present or page is not in DRAM node
-    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || (pfn_to_nid(pte_pfn(*ptep)) == NVRAM_NODE)) {
+    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || !contains(pfn_to_nid(pte_pfn(*ptep)), DRAM_MODE)) {
         if((n_found == n_to_find) && !found_last) { // found all + last
             last_addr_dram = addr;
             found_last = 1;
@@ -96,7 +177,7 @@ static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next
 
     // if(!pte_young(pte) && !pte_dirty(pte)) {
 
-    //     // TODO: Swap out
+    //     // TODO: Maybe Swap out if mlocked
     //     found_addrs[n_found].addr = addr;
     //     found_addrs[n_found++].pid_retval = curr_pid;
     // }
@@ -120,14 +201,14 @@ static int pte_callback_force_nvram(pte_t *ptep, unsigned long addr, unsigned lo
                         struct mm_walk *walk) {
 
     // If already found n pages, page is not present or page is not in NVRAM node
-    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || (pfn_to_nid(pte_pfn(*ptep)) != NVRAM_NODE)) {
+    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || !contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
         if((n_found == n_to_find) && !found_last) { // found all + last
             last_addr_nvram = addr;
             found_last = 1;
         }
         return 0;
     }
-    //FIXME: third force all?
+    //TODO: maybe third force all?
     if(pte_young(*ptep) || pte_dirty(*ptep)) {
         // Send to DRAM
         found_addrs[n_found].addr = addr;
@@ -141,7 +222,7 @@ static int pte_callback_perfect_nvram(pte_t *ptep, unsigned long addr, unsigned 
                         struct mm_walk *walk) {
 
     // If already found n pages, page is not present or page is not in NVRAM node
-    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || (pfn_to_nid(pte_pfn(*ptep)) != NVRAM_NODE)) {
+    if((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || !contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
         if((n_found == n_to_find) && !found_last) { // found all + last
             last_addr_nvram = addr;
             found_last = 1;
@@ -157,6 +238,19 @@ static int pte_callback_perfect_nvram(pte_t *ptep, unsigned long addr, unsigned 
 
     return 0;
 }
+
+
+
+/*
+-------------------------------------------------------------------------------
+
+PAGE WALKERS
+
+-------------------------------------------------------------------------------
+*/
+
+
+
 static int do_page_walk(int n_cycles, struct mm_walk_ops mem_walk_ops, int last_pid, int last_addr) {
     struct mm_struct *mm;
     int i;
@@ -249,6 +343,10 @@ static int switch_walk(int n) {
     last_pid_nvram = do_page_walk(1, mem_walk_ops, last_pid_nvram, last_addr_nvram);
 
     int nvram_found = n_found; // store the index of last nvram addr found
+    if(nvram_found == 0) {
+        return -1;
+    }
+
     found_addrs[n_found].pid_retval = 0; // fill separator after
 
     n_to_find = n_found*2 + 1; // try to find the same amount of dram addrs
@@ -273,6 +371,18 @@ static int switch_walk(int n) {
     }
     return -1;
 }
+
+
+
+/*
+-------------------------------------------------------------------------------
+
+BIND/UNBIND FUNCTIONS
+
+-------------------------------------------------------------------------------
+*/
+
+
 
 static int bind_pid(pid_t pid) {
     if((pid <= 0) || (pid > MAX_PID_N)) {
@@ -307,40 +417,24 @@ static int unbind_pid(pid_t pid) {
         return -1;
     }
 
-    if(last_pid_dram > i) {
-        last_pid_dram--;
-    }
-    else if(last_pid_dram == i) {
-        last_addr_dram = 0;
-
-        if(last_pid_dram == (n_pids-1)) {
-            last_pid_dram = 0;
-        }
-    }
-
-    if(last_pid_nvram > i) {
-        last_pid_nvram--;
-    }
-    else if(last_pid_nvram == i) {
-        last_addr_nvram = 0;
-
-        if(last_pid_nvram == (n_pids-1)) {
-            last_pid_nvram = 0;
-        }
-    }
-
-    // Shift left all subsequent entries
-    int j;
-    for(j = i; j < (n_pids - 1); j++) {
-        task_items[j] = task_items[j+1];
-    }
-    n_pids--;
-
+    update_pid_list(i);
     pr_info("PLACEMENT: Unbound pid=%d.\n", pid);
     return 0;
 }
 
-/* Valid commands:
+
+
+/*
+-------------------------------------------------------------------------------
+
+MESSAGE/REQUEST PROCESSING
+
+-------------------------------------------------------------------------------
+*/
+
+
+
+/* Valid request commands:
 
 BIND [pid]
 UNBIND [pid]
@@ -353,6 +447,7 @@ static void process_req(req_t *req) {
     if(req != NULL) {
         switch(req->op_code) {
             case FIND_OP:
+                refresh_pids();
                 switch(req->mode) {
                     case DRAM_MODE:
                         ret = dram_walk(req->pid_n);
@@ -365,9 +460,6 @@ static void process_req(req_t *req) {
                         break;
                     default:
                         pr_info("PLACEMENT: Unrecognized mode.\n");
-                }
-                if(ret != -1) {
-                    pr_info("PLACEMENT: Found %d page(s).\n", n_found-1);
                 }
                 break;
             case BIND_OP:
@@ -424,11 +516,27 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     NETLINK_CB(skb_out).dst_group = 0; // unicast
     
-    pr_info("PLACEMENT: Sending a total of %d entry(ies) in %d packet(s).\n", n_found, i+1);
+    if(n_found == 1) {
+        pr_info("PLACEMENT: Sending %d entry to ctl.\n", n_found);
+    }
+    else {
+        pr_info("PLACEMENT: Sending %d entries to ctl in %d packets.\n", n_found, i+1);
+    }
     if ((res = nlmsg_unicast(nl_sock, skb_out, sender_pid)) < 0) {
             pr_info("PLACEMENT: Error sending response to ctl.\n");
     }
 }
+
+
+
+/*
+-------------------------------------------------------------------------------
+
+MODULE INIT/EXIT
+
+-------------------------------------------------------------------------------
+*/
+
 
 
 static int __init _on_module_init(void) {

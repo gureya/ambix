@@ -34,8 +34,13 @@ int bind_uds() {
     struct bitmask *bm;
     int ncpus = numa_num_configured_cpus();
     bm = numa_bitmask_alloc(ncpus);
-    numa_bitmask_setbit(bm, DRAM_NODE);
-    numa_bitmask_setbit(bm, NVRAM_NODE);
+
+    for(int i=0; i<n_dram_nodes; i++) {
+        numa_bitmask_setbit(bm, DRAM_NODES[i]);
+    }
+    for(int i=0; i<n_nvram_nodes; i++) {
+        numa_bitmask_setbit(bm, NVRAM_NODES[i]);
+    }
 
     if(set_mempolicy(MPOL_BIND, bm->maskp, bm->size + 1)) {
         fprintf(stderr, "Error in set_mempolicy: %s\n", strerror(errno));

@@ -1,8 +1,8 @@
 #ifndef _PNP_H
 #define _PNP_H
 
-#define MAX_PIDS 20
-#define MAX_PID_N 32768 // default max pid number in /proc/sys/kernel/pid_max
+#define MAX_PIDS 5
+#define MAX_PID_N 2147483647 // set to INT_MAX. true max pid number is shown in /proc/sys/kernel/pid_max
 
 // Find-related constants:
 #define DRAM_MODE 0
@@ -12,9 +12,12 @@
 #define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
 
-// Node definition: DRAM node id must always be a lower value than NVRAM node id due to the memory policy set in client-placement.c
-#define DRAM_NODE 2
-#define NVRAM_NODE 3
+// Node definition: DRAM nodes' ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
+static const int DRAM_NODES[]  = {0,1};
+static const int NVRAM_NODES[]  = {2,3};
+
+static const int n_dram_nodes = sizeof(DRAM_NODES)/sizeof(DRAM_NODES[0]);
+static const int n_nvram_nodes = sizeof(NVRAM_NODES)/sizeof(NVRAM_NODES[0]);
 
 // Netlink:
 #define NETLINK_USER 31
@@ -50,11 +53,11 @@ typedef struct req {
 
 // Misc:
 #define MAX_COMMAND_SIZE 80
-#define DRAM_TARGET 0.95
-#define DRAM_THRESH_PLUS 0.01
+#define DRAM_TARGET 0.80
+#define DRAM_THRESH_PLUS 0.05
 #define DRAM_THRESH_NEGATIVE 0.15
 #define MEMCHECK_INTERVAL 2
-#define SWITCH_INTERVAL 3
+#define SWITCH_INTERVAL 5
 
 
 // Memory ranges: (64-bit systems only use 48-bit)
@@ -62,4 +65,26 @@ typedef struct req {
 #define MAX_ADDRESS (IS_64BIT ? 0xFFFF880000000000UL : 0xC0000000UL) // Max user-space addresses for the x86 architecture
 #define MAX_ADDRESS_ARM (IS_64BIT ? 0x800000000000UL : 0xC0000000UL) // Max user-space addresses for the ARM architecture
 
+
+// Helper function:
+
+int contains(int value, int mode) {
+    const int *array;
+    int size, i;
+    
+    if(mode == NVRAM_MODE) {
+        array = NVRAM_NODES;
+        size = n_nvram_nodes;
+    }
+    else {
+        array = DRAM_NODES;
+        size = n_dram_nodes;
+    }
+    for(i=0; i<size; i++) {
+        if(array[i] == value) {
+            return 1;
+        }
+    }
+    return 0;
+}
 #endif

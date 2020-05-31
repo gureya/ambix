@@ -6,6 +6,10 @@ socket
 # Prerequisites
 *.d
 
+blackscholes
+coremark
+stress_test
+
 # Object files
 *.o
 *.ko

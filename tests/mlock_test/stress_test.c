@@ -4,8 +4,8 @@
 
 #include <unistd.h>
 
-#define RAM_SIZE 4 // in GB
-#define WORKLOAD_PER 0.32
+#define RAM_SIZE 8 // in GB
+#define WORKLOAD_PER 0.39
 
 void access_array(int *array, size_t size, size_t page_size) {
     int var;
