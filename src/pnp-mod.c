@@ -44,14 +44,16 @@ MODULE_INFO(vermagic, "5.6.3-patched SMP mod_unload modversions ");
 struct sock *nl_sock;
 
 addr_info_t *found_addrs;
+addr_info_t *backup_addrs; // prevents a second page walk
 addr_info_t *trade_candidates;
 
 struct task_struct **task_items;
 struct nlmsghdr **nlmh_array;
 int n_pids = 0;
 
-unsigned long last_addr_dram = 0;
-unsigned long last_addr_nvram = 0;
+volatile unsigned long last_addr_dram = 0;
+volatile unsigned long last_addr_nvram = 0;
+volatile int found_last = 0;
 
 int last_pid_dram = 0;
 int last_pid_nvram = 0;
@@ -59,7 +61,7 @@ int last_pid_nvram = 0;
 int curr_pid = 0;
 int n_to_find = 0;
 int n_found = 0;
-int found_last = 0;
+int n_backup = 0;
 
 
 
@@ -192,6 +194,12 @@ static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next
         *ptep = pte_mkold(old_pte); // unset modified bit
         *ptep = pte_mkclean(old_pte); // unset dirty bit
         ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, *ptep);
+
+        // Add to backup list
+        if(n_backup < n_to_find) {
+            backup_addrs[n_backup].addr = addr;
+            backup_addrs[n_backup++].pid_retval = curr_pid;
+        }
     }
 
     return 0;
@@ -208,8 +216,7 @@ static int pte_callback_force_nvram(pte_t *ptep, unsigned long addr, unsigned lo
         }
         return 0;
     }
-    //TODO: maybe third force all?
-    if(pte_young(*ptep) || pte_dirty(*ptep)) {
+    if(!(pte_young(*ptep) && pte_dirty(*ptep)) && (pte_young(*ptep) || pte_dirty(*ptep))) {
         // Send to DRAM
         found_addrs[n_found].addr = addr;
         found_addrs[n_found++].pid_retval = curr_pid;
@@ -251,67 +258,77 @@ PAGE WALKERS
 
 
 
-static int do_page_walk(int n_cycles, struct mm_walk_ops mem_walk_ops, int last_pid, int last_addr) {
+static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned long last_addr) {
     struct mm_struct *mm;
     int i;
-    for(i = 0; (i < n_cycles) && (n_pids > 0); i++) {
-        int j;
-        
-        // begin cycle at last_pid->last_addr
-        mm = task_items[last_pid]->mm;
+    //pr_info("PLACEMENT: lastaddr - %p\n", (void *) last_addr);
+    // begin at last_pid->last_addr
+    mm = task_items[last_pid]->mm;
+    spin_lock(&mm->page_table_lock);
+    curr_pid = task_items[last_pid]->pid;
+    walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
+    spin_unlock(&mm->page_table_lock);
+    if(n_found >= n_to_find) {
+        goto out;
+    }
+
+    for(i=last_pid+1; i<n_pids; i++) {
+
+        mm = task_items[i]->mm;
         spin_lock(&mm->page_table_lock);
-        curr_pid = task_items[last_pid]->pid;
-        walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
+        curr_pid = task_items[i]->pid;
+        walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
         spin_unlock(&mm->page_table_lock);
         if(n_found >= n_to_find) {
-            break;
-        }
-
-        for(j=last_pid+1; j<n_pids; j++) {
-
-            mm = task_items[j]->mm;
-            spin_lock(&mm->page_table_lock);
-            curr_pid = task_items[j]->pid;
-            walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-            spin_unlock(&mm->page_table_lock);
-            if(n_found >= n_to_find) {
-                return j;
-            }
-        }
-
-        for(j = 0; j < last_pid-1; j++) {
-            mm = task_items[j]->mm;
-            spin_lock(&mm->page_table_lock);
-            curr_pid = task_items[j]->pid;
-            walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-            spin_unlock(&mm->page_table_lock);
-            if(n_found >= n_to_find) {
-                return j;
-            }
-        }
-
-        // finish cycle at last_pid->last_addr
-        mm = task_items[last_pid]->mm;
-        spin_lock(&mm->page_table_lock);
-        curr_pid = task_items[last_pid]->pid;
-        walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
-        spin_unlock(&mm->page_table_lock);
-        if(n_found >= n_to_find) {
-            break;
+            return i;
         }
     }
+
+    for(i = 0; i < last_pid-1; i++) {
+        mm = task_items[i]->mm;
+        spin_lock(&mm->page_table_lock);
+        curr_pid = task_items[i]->pid;
+        walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+        spin_unlock(&mm->page_table_lock);
+        if(n_found >= n_to_find) {
+            return i;
+        }
+    }
+
+    // finish cycle at last_pid->last_addr
+    mm = task_items[last_pid]->mm;
+    spin_lock(&mm->page_table_lock);
+    curr_pid = task_items[last_pid]->pid;
+    walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
+    spin_unlock(&mm->page_table_lock);
+
+out:
     return last_pid;
 }
 static int dram_walk(int n) {
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_dram};
 
     n_to_find = n;
+    n_backup = 0;
     found_last = 0;
 
-    last_pid_dram = do_page_walk(2, mem_walk_ops, last_pid_dram, last_addr_dram);
+    last_pid_dram = do_page_walk(mem_walk_ops, last_pid_dram, last_addr_dram);
 
     if(n_found >= n_to_find) {
         return 0;
+    }
+    else if(n_backup > 0) {
+        int remaining = n_to_find - n_found;
+        int i;
+
+        for(i=0; (i < remaining) && (i < n_backup); i++) {
+            found_addrs[n_found].addr = backup_addrs[i].addr;
+            found_addrs[n_found++].pid_retval = backup_addrs[i].pid_retval;
+        }
+
+        if(n_found >= n_to_find) {
+            return 0;
+        }
     }
     return -1;
 }
@@ -322,10 +339,10 @@ static int nvram_walk(int n) {
     n_to_find = n;
     found_last = 0;
 
-    last_pid_nvram = do_page_walk(1, mem_walk_ops, last_pid_nvram, last_addr_nvram);
+    last_pid_nvram = do_page_walk(mem_walk_ops, last_pid_nvram, last_addr_nvram);
     if(n_found < n_to_find) {
         mem_walk_ops.pte_entry = pte_callback_force_nvram;
-        last_pid_nvram = do_page_walk(1, mem_walk_ops, last_pid_nvram, last_addr_nvram);
+        last_pid_nvram = do_page_walk(mem_walk_ops, last_pid_nvram, last_addr_nvram);
     }
 
     if(n_found >= n_to_find) {
@@ -340,7 +357,7 @@ static int switch_walk(int n) {
     n_to_find = n;
     found_last = 0;
 
-    last_pid_nvram = do_page_walk(1, mem_walk_ops, last_pid_nvram, last_addr_nvram);
+    last_pid_nvram = do_page_walk(mem_walk_ops, last_pid_nvram, last_addr_nvram);
 
     int nvram_found = n_found; // store the index of last nvram addr found
     if(nvram_found == 0) {
@@ -352,16 +369,29 @@ static int switch_walk(int n) {
     n_to_find = n_found*2 + 1; // try to find the same amount of dram addrs
     n_found++;
     found_last = 0;
+    n_backup = 0;
 
     mem_walk_ops.pte_entry = pte_callback_dram;
-    last_pid_dram = do_page_walk(2, mem_walk_ops, last_pid_dram, last_addr_dram);
-
+    last_pid_dram = do_page_walk(mem_walk_ops, last_pid_dram, last_addr_dram);
     int dram_found = n_found - nvram_found - 1;
     // found equal number of dram and nvram entries
     if(dram_found == nvram_found) {
         return 0;
     }
-    // if it did not reconstruct array
+    else if((dram_found < nvram_found) && (n_backup > 0)) {
+        int remaining = nvram_found - dram_found;
+        int i;
+        
+        for(i=0; (i < remaining) && (i < n_backup); i++) {
+            found_addrs[n_found].addr = backup_addrs[i].addr;
+            found_addrs[n_found++].pid_retval = backup_addrs[i].pid_retval;
+        }
+
+        if(dram_found == nvram_found) {
+            return 0;
+        }
+    }
+    // if it did not find an equal number then reconstruct array
     found_addrs[dram_found].pid_retval = 0; // fill separator in new space
     n_found = dram_found * 2 + 1; // discard last entries
     int i;
@@ -448,18 +478,20 @@ static void process_req(req_t *req) {
         switch(req->op_code) {
             case FIND_OP:
                 refresh_pids();
-                switch(req->mode) {
-                    case DRAM_MODE:
-                        ret = dram_walk(req->pid_n);
-                        break;
-                    case NVRAM_MODE:
-                        ret = nvram_walk(req->pid_n);
-                        break;
-                    case SWITCH_MODE:
-                        ret = switch_walk(req->pid_n);
-                        break;
-                    default:
-                        pr_info("PLACEMENT: Unrecognized mode.\n");
+                if(n_pids>0) {
+                    switch(req->mode) {
+                        case DRAM_MODE:
+                            ret = dram_walk(req->pid_n);
+                            break;
+                        case NVRAM_MODE:
+                            ret = nvram_walk(req->pid_n);
+                            break;
+                        case SWITCH_MODE:
+                            ret = switch_walk(req->pid_n);
+                            break;
+                        default:
+                            pr_info("PLACEMENT: Unrecognized mode.\n");
+                    }
                 }
                 break;
             case BIND_OP:
@@ -482,7 +514,6 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
     struct nlmsghdr *nlmh;
     int sender_pid;
     struct sk_buff *skb_out;
-    int rem_size;
     req_t *in_req;
     int res;
 
@@ -496,7 +527,8 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     process_req(in_req);
 
-    skb_out = nlmsg_new(sizeof(addr_info_t) * n_found, 0);
+    int required_packets = (n_found / MAX_N_PER_PACKET) + ((n_found % MAX_N_PER_PACKET) != 0);
+    skb_out = nlmsg_new(NLMSG_LENGTH(MAX_PAYLOAD) * required_packets, GFP_KERNEL);
     if (!skb_out) {
         pr_err("Failed to allocate new skb.\n");
         return;
@@ -504,12 +536,12 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     int i;
 
-    for(i=0; (i*MAX_N_PER_PACKET + MAX_N_PER_PACKET) < n_found; i++) { // process all but last packet
+    for(i=0; i < required_packets-1; i++) { // process all but last packet
         nlmh_array[i] = nlmsg_put(skb_out, 0, 0, 0, MAX_N_PER_PACKET * sizeof(addr_info_t), NLM_F_MULTI);
         memset(NLMSG_DATA(nlmh_array[i]), 0, MAX_PAYLOAD);
         memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, MAX_PAYLOAD);
     }
-    rem_size = (n_found - i*MAX_N_PER_PACKET) * sizeof(addr_info_t);
+    int rem_size = (n_found % MAX_N_PER_PACKET) * sizeof(addr_info_t);
 
     nlmh_array[i] = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, rem_size, 0);
     memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, rem_size);
@@ -520,7 +552,7 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
         pr_info("PLACEMENT: Sending %d entry to ctl.\n", n_found);
     }
     else {
-        pr_info("PLACEMENT: Sending %d entries to ctl in %d packets.\n", n_found, i+1);
+        pr_info("PLACEMENT: Sending %d entries to ctl in %d packets.\n", n_found, required_packets);
     }
     if ((res = nlmsg_unicast(nl_sock, skb_out, sender_pid)) < 0) {
             pr_info("PLACEMENT: Error sending response to ctl.\n");
@@ -544,6 +576,7 @@ static int __init _on_module_init(void) {
 
     task_items = kmalloc(sizeof(struct task_struct *) * MAX_PIDS, GFP_KERNEL);
     found_addrs = kmalloc(sizeof(addr_info_t) * MAX_N_FIND, GFP_KERNEL);
+    backup_addrs = kmalloc(sizeof(addr_info_t) * MAX_N_FIND, GFP_KERNEL);
     nlmh_array = kmalloc(sizeof(struct nlmsghdr *) * MAX_PACKETS, GFP_KERNEL);
 
     struct netlink_kernel_cfg cfg = {
@@ -565,6 +598,7 @@ static void __exit _on_module_exit(void) {
 
     kfree(task_items);
     kfree(found_addrs);
+    kfree(backup_addrs);
     kfree(nlmh_array);
 }
 

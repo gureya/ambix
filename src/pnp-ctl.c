@@ -20,7 +20,7 @@
 
 int netlink_fd;
 
-long page_size;
+long page_size; // in kB
 
 struct sockaddr_nl src_addr, dst_addr;
 struct nlmsghdr *nlmh_out;//, *nlmh_in;
@@ -34,6 +34,8 @@ struct iovec iov_out, iov_in;
 struct msghdr msg_out, msg_in;
 
 volatile int exit_sig = 0;
+volatile int switch_act = 1;
+volatile int thresh_act = 1;
 
 pthread_t stdin_thread, socket_thread, threshold_thread, switch_thread;
 pthread_mutex_t comm_lock, placement_lock;
@@ -110,37 +112,9 @@ int send_req(req_t req, addr_info_t **out) {
         i++;
 
     }
-    //printf("Received a total of %d packets.\n", i);
     pthread_mutex_unlock(&comm_lock);
     return 1;
 }
-
-// void print_command(char *cmd) {
-//   FILE *fp;
-//   char buf[1024];
-
-//   if ((fp = popen(cmd, "r")) == NULL) {
-//     perror("popen");
-//     exit(-1);
-//   }
-
-//   while(fgets(buf, sizeof(buf), fp) != NULL) {
-//     printf("%s", buf);
-//   }
-
-//   if(pclose(fp))  {
-//     perror("pclose");
-//     exit(-1);
-//   }
-// }
-
-// void print_node_allocations(int pid) {
-//     char buf[1024];
-//     snprintf(buf, sizeof(buf), "numastat -c %d", getpid());
-//     printf("\x1B[32m");
-//     print_command(buf);
-//     printf("\x1B[0m");
-// }
 
 int send_bind(int pid) {
     req_t req;
@@ -182,7 +156,7 @@ int do_migration(int mode, int n_found) {
     const int *node_list;
     int size;
 
-    if(NVRAM_MODE) {
+    if(mode == DRAM_MODE) {
         node_list = NVRAM_NODES;
         size = n_nvram_nodes;
     }
@@ -201,9 +175,9 @@ int do_migration(int mode, int n_found) {
         
         long long node_fr = 0;
         numa_node_size64(curr_node, &node_fr);
-        int n_avail_pages = node_fr/page_size;
+        long long n_avail_pages = node_fr/page_size;
 
-        int j=0;
+        long j=0;
         for(; (j < n_avail_pages) && (n_processed+j < n_found); j++) {
             addr[n_processed+j] = (void *) candidates[n_processed+j].addr;
             dest_nodes[n_processed+j] = curr_node;
@@ -217,6 +191,7 @@ int do_migration(int mode, int n_found) {
         curr_pid=candidates[n_migrated].pid_retval;
 
         for(i=1; (candidates[n_migrated+i].pid_retval == curr_pid) && (n_migrated+i < n_processed); i++);
+
         void **addr_displacement = addr + n_migrated;
         int *dest_nodes_displacement = dest_nodes + n_migrated;
         if(numa_move_pages(curr_pid, (unsigned long) i, addr_displacement, dest_nodes_displacement, status, 0)) {
@@ -288,7 +263,6 @@ int do_switch(int n_found) {
         int nvram_processed = nvram_migrated;
 
         for(int i=0; (i < n_dram_nodes) && (nvram_processed < n_found); i++) {
-            printf("forN\n");
             int curr_node = DRAM_NODES[i];
             
             long long node_fr = 0;
@@ -305,7 +279,6 @@ int do_switch(int n_found) {
         }
 
         if(old_n_processed < nvram_processed) {
-            printf("oldN\n");
             // Send processed pages to DRAM
             int n_migrated,i;
             for(n_migrated=0, i=0; n_migrated < nvram_processed; n_migrated+=i) {
@@ -340,7 +313,6 @@ int send_find(int n_pages, int mode) {
     req.pid_n = n_pages;
     req.mode = mode;
 
-    
     send_req(req, &candidates);
 
     int n_found=-1;
@@ -366,12 +338,15 @@ int send_find(int n_pages, int mode) {
 
 void *switch_placement(void *args) {
     while(!exit_sig) {
-        pthread_mutex_lock(&placement_lock);
-        int n_switched = send_find(MAX_N_SWITCH, SWITCH_MODE);
-        if(n_switched > 0) {
-            printf("DRAM<->NVRAM: Switched %d out of %d pages.\n", n_switched, (int) MAX_N_SWITCH*2);
+        if(switch_act) {
+            pthread_mutex_lock(&placement_lock);
+            int n_switched = send_find(MAX_N_SWITCH, SWITCH_MODE);
+            if(n_switched > 0) {
+                printf("DRAM<->NVRAM: Switched %d out of %d pages.\n", n_switched, (int) MAX_N_SWITCH*2);
+            }
+            pthread_mutex_unlock(&placement_lock);
         }
-        pthread_mutex_unlock(&placement_lock);
+
         sleep(SWITCH_INTERVAL);
     }
 
@@ -385,37 +360,41 @@ void *threshold_placement(void *args) {
     int n_pages;
 
     while(!exit_sig) {
-        for(int i=0; i < n_dram_nodes; i++) {
-            long long node_fr = 0;
-            total_node_sz += numa_node_size64(DRAM_NODES[i], &node_fr);
-            total_node_fr += node_fr;
-        }
-
-        usage = 1.0 * (total_node_sz - total_node_fr) / total_node_sz;
+        if(thresh_act) {
         
-
-        printf("Current DRAM Usage: %0.2f%%\n", usage*100);
-        pthread_mutex_lock(&placement_lock);
-        if(usage > (DRAM_TARGET+DRAM_THRESH_PLUS)) {
-            int n_bytes = (usage - DRAM_TARGET) * total_node_sz;
-            n_pages = ceil(n_bytes/page_size);
-            n_pages = fmin(n_pages, MAX_N_FIND);
-            int n_migrated = send_find(n_pages, DRAM_MODE);
-            if(n_migrated > 0) {
-                printf("DRAM->NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+            for(int i=0; i < n_dram_nodes; i++) {
+                long long node_fr = 0;
+                total_node_sz += numa_node_size64(DRAM_NODES[i], &node_fr);
+                total_node_fr += node_fr;
             }
+
+            usage = 1.0 * (total_node_sz - total_node_fr) / total_node_sz;
+            
+
+            printf("Current DRAM Usage: %0.2f%%\n", usage*100);
+            pthread_mutex_lock(&placement_lock);
+            if(usage > (DRAM_TARGET+DRAM_THRESH_PLUS)) {
+                long long n_bytes = (usage - DRAM_TARGET) * total_node_sz;
+                n_pages = ceil(n_bytes/page_size);
+                n_pages = fmin(n_pages, MAX_N_FIND);
+                int n_migrated = send_find(n_pages, DRAM_MODE);
+                if(n_migrated > 0) {
+                    printf("DRAM->NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+                }
+            }
+
+            else if(usage < (DRAM_TARGET-DRAM_THRESH_NEGATIVE)) {
+                int n_bytes = (DRAM_TARGET - usage) * total_node_sz;
+                n_pages = ceil(n_bytes/page_size);
+                n_pages = fmin(n_pages, MAX_N_FIND);
+                int n_migrated = send_find(n_pages, NVRAM_MODE);
+                if(n_migrated > 0) {
+                    printf("NVRAM->DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
+                }
+            }
+            pthread_mutex_unlock(&placement_lock);
         }
 
-        else if(usage < (DRAM_TARGET-DRAM_THRESH_NEGATIVE)) {
-            int n_bytes = (DRAM_TARGET - usage) * total_node_sz;
-            n_pages = ceil(n_bytes/page_size);
-            n_pages = fmin(n_pages, MAX_N_FIND);
-            int n_migrated = send_find(n_pages, NVRAM_MODE);
-            if(n_migrated > 0) {
-                printf("NVRAM->DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
-            }
-        }
-        pthread_mutex_unlock(&placement_lock);
         sleep(MEMCHECK_INTERVAL);
     }
 
@@ -430,8 +409,10 @@ void *process_stdin(void *args) {
     printf("Available commands:\n"
             "\tbind [pid]\n"
             "\tunbind [pid]\n"
-            "\tDEBUG: send [n] [mode]\n"
+            "\tDEBUG: send [n] [dram|nvram]\n"
             "\tDEBUG: switch [n]\n"
+            "\tDEBUG: toggle [switch|thresh|all]\n"
+            "\tDEBUG: clear\n"
             "\texit\n");
 
     while((fgets(command, MAX_COMMAND_SIZE, stdin) != NULL) && strcmp(command, "exit\n")) {
@@ -488,13 +469,17 @@ void *process_stdin(void *args) {
                 continue;
             }
 
-            int n_migrated;
+            int n_migrated = 0;
 
             if(!strcmp(substring, "dram\n")) {
-                n_migrated = send_find(n, DRAM_MODE);
+                pthread_mutex_lock(&placement_lock);
+                n_migrated = send_find(n, NVRAM_MODE);
+                pthread_mutex_unlock(&placement_lock);
             }
             else if(!strcmp(substring, "nvram\n")) {
-                n_migrated = send_find(n, NVRAM_MODE);
+                pthread_mutex_lock(&placement_lock);
+                n_migrated = send_find(n, DRAM_MODE);
+                pthread_mutex_unlock(&placement_lock);
             }
 
             else {
@@ -512,10 +497,61 @@ void *process_stdin(void *args) {
                 continue;
             }
             long n = strtol(substring, NULL, 10);
+            pthread_mutex_lock(&placement_lock);
             int n_switched = send_find(n, SWITCH_MODE);
+            pthread_mutex_unlock(&placement_lock);
             if(n_switched > 0) {
                 printf("DRAM<->NVRAM: Switched %d out of %d pages.\n", n_switched, (int) n*2);
             }
+        }
+
+        else if(!strcmp(substring, "toggle")) {
+            if((substring = strtok(NULL, " ")) == NULL) {
+                fprintf(stderr, "Invalid argument for toggle command.\n");
+                continue;
+            }
+            if(!strcmp(substring, "switch\n")) {
+                switch_act = 1 - switch_act;
+
+                if(switch_act) {
+                    printf("Switch component turned ON\n");
+                }
+                else {
+                    printf("Switch component turned OFF\n");
+                }
+            }
+            else if(!strcmp(substring, "thresh\n")) {
+                thresh_act = 1 - thresh_act;
+
+                if(thresh_act) {
+                    printf("Threshold component turned ON\n");
+                }
+                else {
+                    printf("Threshold component turned OFF\n");
+                }
+            }
+            else if(!strcmp(substring, "all\n")) {
+                switch_act = 1 - switch_act;
+                thresh_act = 1 - thresh_act;
+
+                if(switch_act) {
+                    printf("Switch component turned ON\n");
+                }
+                else {
+                    printf("Switch component turned OFF\n");
+                }
+
+                if(thresh_act) {
+                    printf("Threshold component turned ON\n");
+                }
+                else {
+                    printf("Threshold component turned OFF\n");
+                }
+            }
+        }
+
+        else if(!strcmp(substring, "clr\n") || !strcmp(substring, "clear\n")) {
+            system("@cls||clear");
         }
 
         else {
@@ -523,8 +559,10 @@ void *process_stdin(void *args) {
                     "Available commands:\n"
                     "\tbind [pid]\n"
                     "\tunbind [pid]\n"
-                    "\tDEBUG: send [n] [mode]\n"
+                    "\tDEBUG: send [n] [dram|nvram]\n"
                     "\tDEBUG: switch [n]\n"
+                    "\tDEBUG: toggle [switch|thresh|all]\n"
+                    "\tDEBUG: clear\n"
                     "\texit\n");
 
         }
@@ -670,20 +708,20 @@ int main() {
         fprintf(stderr, "Error spawning socket thread: %s\n", strerror(errno));
     }
 
-    // else if(pthread_create(&threshold_thread, NULL, threshold_placement, NULL)) {
-    //     fprintf(stderr, "Error spawning thresold placement thread: %s\n", strerror(errno));
-    // }
+    else if(pthread_create(&threshold_thread, NULL, threshold_placement, NULL)) {
+        fprintf(stderr, "Error spawning thresold placement thread: %s\n", strerror(errno));
+    }
 
-    // else if(pthread_create(&switch_thread, NULL, switch_placement, NULL)) {
-    //     fprintf(stderr, "Error spawning switch thread: %s\n", strerror(errno));
-    // }
+    else if(pthread_create(&switch_thread, NULL, switch_placement, NULL)) {
+        fprintf(stderr, "Error spawning switch thread: %s\n", strerror(errno));
+    }
 
     else {
         pthread_join(stdin_thread, NULL);
         printf("Exiting ctl...\n");
         pthread_join(socket_thread, NULL);
-        // pthread_join(threshold_thread, NULL);
-        // pthread_join(switch_thread, NULL);
+        pthread_join(threshold_thread, NULL);
+        pthread_join(switch_thread, NULL);
 
         pthread_mutex_destroy(&comm_lock);
         pthread_mutex_destroy(&placement_lock);
