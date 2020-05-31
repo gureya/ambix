@@ -1,8 +1,14 @@
 .DS_Store
 .history
 *.swp
+socket
+.vscode
 # Prerequisites
 *.d
+
+blackscholes
+coremark
+stress_test
 
 # Object files
 *.o

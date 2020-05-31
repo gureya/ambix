@@ -107,7 +107,8 @@ int main(int argc, char **argv)
 		printf("Test successful.\n");
 	else
 		printf("%d errors.\n", errors);
-
+    
+    char r[20];
     while(1) {
         scanf("%s", r);
         if(!strcmp(r, "exit")) {
