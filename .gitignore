@@ -8,7 +8,6 @@ socket
 
 blackscholes
 coremark
-stress_test
 
 # Object files
 *.o

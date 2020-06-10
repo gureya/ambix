@@ -15,9 +15,9 @@ int access_array(int *array, size_t size, size_t page_size) {
     int var;
     for(size_t i=0; i<size; i+=page_size/sizeof(int)) {
 	//printf("i=%lu\n", i);
-        array[i] = 1;	
+        array[i] = 1;
     }
-}	
+}
 
 int main() {
     size_t page_size = sysconf(_SC_PAGESIZE);
@@ -35,7 +35,7 @@ int main() {
     printf("End malloc\n");
     access_array(test_array, array_size/sizeof(int), page_size);
 
-    /*clock_t t;
+    clock_t t;
     printf("Starting mlockall()\n");
     t = clock();
     if(mlockall(MCL_CURRENT || MCL_FUTURE)) {
@@ -44,7 +44,7 @@ int main() {
         return 1;
     }
     t = clock() - t;
-    printf("mlockall() complete: took %f seconds\n", ((double)t)/CLOCKS_PER_SEC);*/
+    printf("mlockall() complete: took %f seconds\n", ((double)t)/CLOCKS_PER_SEC);
 
     char r[4];
     while(1) {
