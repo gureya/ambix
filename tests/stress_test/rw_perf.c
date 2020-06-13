@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
-
+#include <time.h>
 #include <unistd.h>
 
 void write_array(char *array, size_t size, size_t page_size) {
@@ -18,14 +18,14 @@ void access_array(char *array, size_t size, size_t page_size) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
+    if (argc != 3) {
         return 1;
     }
-
     size_t page_size = sysconf(_SC_PAGESIZE);
     printf("Page Size is: %lu\n", page_size);
 
     size_t array_size = (size_t) atoi(argv[1]) * 1024 * 1024 * 1024;
+    int n_runs = atoi(argv[2]);
 
     printf("Allocating array of size %lu\n", array_size);
     char *test_array = malloc(array_size);
@@ -33,13 +33,24 @@ int main(int argc, char **argv) {
 
     char input;
     while((input = getchar()) != 'e') {
+        if (input == '\n') {
+            continue;
+        }
+        clock_t start = clock();
+
         if (input == 'a') {
-            access_array(test_array, array_size, page_size);
+            for(int i=0; i < n_runs; i++) {
+                access_array(test_array, array_size, page_size);
+            }
         }
         else if (input == 'w') {
-            write_array(test_array, array_size, page_size);
+            for(int i=0; i < n_runs; i++) {
+                write_array(test_array, array_size, page_size);
+            }
         }
 
+        double elapsed = (double)(clock() - start) * 1000.0 / CLOCKS_PER_SEC;
+        printf("Time elapsed: %.4f ms\n", elapsed);
     }
 
     getchar();
