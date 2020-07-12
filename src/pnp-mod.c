@@ -39,7 +39,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Memory Access Monitor");
 MODULE_VERSION("0.3");
-MODULE_INFO(vermagic, "5.6.3-patched SMP mod_unload modversions ");
+MODULE_INFO(vermagic, "5.6.14-patched SMP mod_unload modversions ");
 
 struct sock *nl_sock;
 
