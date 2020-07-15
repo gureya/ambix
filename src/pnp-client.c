@@ -46,7 +46,7 @@ int bind_uds() {
         fprintf(stderr, "Error in set_mempolicy: %s\n", strerror(errno));
         return 0;
     }
-    
+
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));
         return 0;
@@ -92,7 +92,7 @@ int unbind_uds() {
     int pid = getpid();
 
     // munlock(0, MAX_ADDRESS);
-    
+
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));
         return 0;

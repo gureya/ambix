@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 
+
 volatile int sig = 0;
 
 typedef struct threads_args {
@@ -38,6 +39,7 @@ int main(int argc, char** argv) {
     int n_threads = atoi(argv[2]);
     int run_time = atoi(argv[3]);
     long page_size = getpagesize();
+
 
     int* array = calloc(array_size, sizeof(int));
 
