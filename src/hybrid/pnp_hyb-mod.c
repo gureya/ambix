@@ -165,7 +165,7 @@ CALLBACK FUNCTIONS
 
 
 
-static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next,
+static int pte_callback_mem(pte_t *ptep, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
 
     // If already found n pages, page is not present or page is not in DRAM node
@@ -183,23 +183,24 @@ static int pte_callback_dram(pte_t *ptep, unsigned long addr, unsigned long next
     //     found_addrs[n_found].addr = addr;
     //     found_addrs[n_found++].pid_retval = curr_pid;
     // }
-    if(!pte_young(*ptep) || !pte_dirty(*ptep)) {
+    if(!pte_dirty(*ptep)) {
 
         // Send to NVRAM
         found_addrs[n_found].addr = addr;
         found_addrs[n_found++].pid_retval = curr_pid;
     }
     else {
+        // Add to backup list
+        if(!pte_young() && (n_backup < n_to_find)) {
+            backup_addrs[n_backup].addr = addr;
+            backup_addrs[n_backup++].pid_retval = curr_pid;
+        }
+
         pte_t old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
         *ptep = pte_mkold(old_pte); // unset modified bit
         *ptep = pte_mkclean(old_pte); // unset dirty bit
         ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, *ptep);
 
-        // Add to backup list
-        if(n_backup < n_to_find) {
-            backup_addrs[n_backup].addr = addr;
-            backup_addrs[n_backup++].pid_retval = curr_pid;
-        }
     }
 
     return 0;
@@ -217,9 +218,9 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
         return 0;
     }
 
-    if(pte_young(*ptep) || pte_dirty(*ptep)) {
-        if(pte_young(*ptep) && pte_dirty(*ptep)) {
-            // Send to DRAM
+    if(pte_dirty(*ptep)) {
+        if(pte_young(*ptep)) {
+            // Send to DRAM (priority)
             found_addrs[n_found].addr = addr;
             found_addrs[n_found++].pid_retval = curr_pid;
         }
@@ -295,7 +296,7 @@ out:
     return last_pid;
 }
 static int dram_walk(int n) {
-    struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_dram};
+    struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_mem};
 
     n_to_find = n;
     n_backup = 0;
@@ -370,7 +371,7 @@ static int switch_walk(int n) {
     found_last = 0;
     n_backup = 0;
 
-    mem_walk_ops.pte_entry = pte_callback_dram;
+    mem_walk_ops.pte_entry = pte_callback_mem;
     last_pid_dram = do_page_walk(mem_walk_ops, last_pid_dram, last_addr_dram);
     int dram_found = n_found - nvram_found - 1;
     // found equal number of dram and nvram entries
