@@ -16,7 +16,7 @@ module: pnp-mod.c pnp.h
 module_install:
 	@$(MAKE) -C $(KROOT) M=$(PWD) modules_install -j 12
 
-clean: 
+clean:
 	@$(MAKE) -C $(KROOT) M=$(PWD) clean
 	rm -rf   Module.symvers modules.order *.o
 

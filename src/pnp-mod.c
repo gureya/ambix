@@ -16,9 +16,9 @@
 #include <linux/kthread.h>
 #include <linux/mempolicy.h>
 #include <linux/module.h>  // Core header for loading LKMs into the kernel
-#include <net/sock.h> 
+#include <net/sock.h>
 #include <linux/netlink.h>
-#include <linux/skbuff.h> 
+#include <linux/skbuff.h>
 #include <linux/mount.h>
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
@@ -381,7 +381,7 @@ static int switch_walk(int n) {
     else if((dram_found < nvram_found) && (n_backup > 0)) {
         int remaining = nvram_found - dram_found;
         int i;
-        
+
         for(i=0; (i < remaining) && (i < n_backup); i++) {
             found_addrs[n_found].addr = backup_addrs[i].addr;
             found_addrs[n_found++].pid_retval = backup_addrs[i].pid_retval;
@@ -547,7 +547,7 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
     memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, rem_size);
 
     NETLINK_CB(skb_out).dst_group = 0; // unicast
-    
+
     if(n_found == 1) {
         pr_info("PLACEMENT: Sending %d entry to ctl.\n", n_found);
     }
