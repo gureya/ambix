@@ -191,7 +191,7 @@ static int pte_callback_mem(pte_t *ptep, unsigned long addr, unsigned long next,
     }
     else {
         // Add to backup list
-        if(!pte_young() && (n_backup < n_to_find)) {
+        if(!pte_young(*ptep) && (n_backup < n_to_find)) {
             backup_addrs[n_backup].addr = addr;
             backup_addrs[n_backup++].pid_retval = curr_pid;
         }
@@ -572,7 +572,7 @@ MODULE INIT/EXIT
 
 
 static int __init _on_module_init(void) {
-    pr_info("PLACEMENT: Hello from module!\n");
+    pr_info("PLACEMENT-HYB: Hello from module!\n");
 
     task_items = kmalloc(sizeof(struct task_struct *) * MAX_PIDS, GFP_KERNEL);
     found_addrs = kmalloc(sizeof(addr_info_t) * MAX_N_FIND, GFP_KERNEL);
@@ -593,7 +593,7 @@ static int __init _on_module_init(void) {
 }
 
 static void __exit _on_module_exit(void) {
-    pr_info("PLACEMENT: Goodbye from module!\n");
+    pr_info("PLACEMENT-HYB: Goodbye from module!\n");
     netlink_kernel_release(nl_sock);
 
     kfree(task_items);
