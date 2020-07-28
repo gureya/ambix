@@ -18,7 +18,7 @@ module_install:
 
 clean:
 	@$(MAKE) -C $(KROOT) M=$(PWD) clean
-	rm -rf   Module.symvers modules.order *.o
+	rm -rf   Module.symvers modules.order *.o *.mod socket
 
 insert:
 	sudo insmod $(KO_FILE)

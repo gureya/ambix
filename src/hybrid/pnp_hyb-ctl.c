@@ -185,7 +185,9 @@ int do_migration(int mode, int n_found) {
 
         n_processed += j;
     }
-    int n_migrated,i;
+    int n_migrated, i;
+    int e = 0; // counts failed migrations
+
     for (n_migrated=0, i=0; n_migrated < n_processed; n_migrated+=i) {
         int curr_pid;
         curr_pid=candidates[n_migrated].pid_retval;
@@ -198,7 +200,8 @@ int do_migration(int mode, int n_found) {
             // Migrate all and output addresses that could not migrate
             for (int j=0; j < i; j++) {
                 if (numa_move_pages(curr_pid, 1, addr_displacement + j, dest_nodes_displacement + j, status, 0)) {
-                    printf("Error migrating addr: %ld\n", (unsigned long) &(addr_displacement + j));
+                    printf("Error migrating addr: %ld, pid: %d\n", (unsigned long) *(addr_displacement + j), curr_pid);
+                    e++;
                 }
             }
         }
@@ -207,7 +210,7 @@ int do_migration(int mode, int n_found) {
     free(addr);
     free(dest_nodes);
     free(status);
-    return n_migrated;
+    return n_migrated - e;
 }
 
 int do_switch (int n_found) {
@@ -223,11 +226,13 @@ int do_switch (int n_found) {
 
     int dram_migrated = 0;
     int nvram_migrated = 0;
+    int dram_e = 0; // counts failed migrations
+    int nvram_e = 0; // counts failed migrations
 
     while ((dram_migrated < n_found) || (nvram_migrated < n_found)) {
         // DRAM -> NVRAM
-        int old_n_processed = dram_migrated;
-        int dram_processed = dram_migrated;
+        int old_n_processed = dram_migrated + dram_e;
+        int dram_processed = old_n_processed;
 
         for (int i=0; (i < n_nvram_nodes) && (dram_processed < n_found); i++) {
             int curr_node = NVRAM_NODES[i];
@@ -246,26 +251,32 @@ int do_switch (int n_found) {
         }
         if (old_n_processed < dram_processed) {
             // Send processed pages to NVRAM
-            int n_migrated,i;
+            int n_migrated, i;
+
             for (n_migrated=0, i=0; n_migrated < dram_processed; n_migrated+=i) {
                 int curr_pid;
-                curr_pid=candidates[n_found+1+n_migrated].pid_retval;
+                curr_pid = candidates[n_found+1+n_migrated].pid_retval;
 
                 for (i=1; (candidates[n_found+1+n_migrated+i].pid_retval == curr_pid) && (n_migrated+i < dram_processed); i++);
                 void **addr_displacement = addr_dram + n_migrated;
                 int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
                 if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement, dest_nodes_displacement, status, 0)) {
-                    dram_migrated += n_migrated;
-                    goto out;
+                    // Migrate all and output addresses that could not migrate
+                    for (int j=0; j < i; j++) {
+                        if (numa_move_pages(curr_pid, 1, addr_displacement + j, dest_nodes_displacement + j, status, 0)) {
+                            printf("Error migrating DRAM/MEM addr: %ld, pid: %d\n", (unsigned long) *(addr_displacement + j), curr_pid);
+                            dram_e++;
+                        }
+                    }
                 }
             }
         }
 
-        dram_migrated = dram_processed;
+        dram_migrated = dram_processed - dram_e;
 
         // NVRAM -> DRAM
-        old_n_processed = nvram_migrated;
-        int nvram_processed = nvram_migrated;
+        old_n_processed = nvram_migrated + nvram_e;
+        int nvram_processed = old_n_processed;
 
         for (int i=0; (i < n_dram_nodes) && (nvram_processed < n_found); i++) {
             int curr_node = DRAM_NODES[i];
@@ -285,7 +296,8 @@ int do_switch (int n_found) {
 
         if (old_n_processed < nvram_processed) {
             // Send processed pages to DRAM
-            int n_migrated,i;
+            int n_migrated, i;
+
             for (n_migrated=0, i=0; n_migrated < nvram_processed; n_migrated+=i) {
                 int curr_pid;
                 curr_pid=candidates[n_migrated].pid_retval;
@@ -294,15 +306,20 @@ int do_switch (int n_found) {
                 void **addr_displacement = addr_nvram + n_migrated;
                 int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
                 if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement, dest_nodes_displacement, status, 0)) {
-                    nvram_migrated += n_migrated;
-                    goto out;
+                    // Migrate all and output addresses that could not migrate
+                    for (int j=0; j < i; j++) {
+                        if (numa_move_pages(curr_pid, 1, addr_displacement + j, dest_nodes_displacement + j, status, 0)) {
+                            printf("Error migrating NVRAM addr: %ld, pid: %d\n", (unsigned long) *(addr_displacement + j), curr_pid);
+                            nvram_e++;
+                        }
+                    }
                 }
             }
         }
 
-        nvram_migrated = nvram_processed;
+        nvram_migrated = nvram_processed - nvram_e;
     }
-out:
+
     free(addr_dram);
     free(addr_nvram);
     free(dest_nodes_dram);
