@@ -225,6 +225,24 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
     return 0;
 }
 
+static int pte_callback_bal(pte_t *ptep, unsigned long addr, unsigned long next,
+                        struct mm_walk *walk) {
+
+    if ((ptep == NULL) || !pte_present(*ptep)) {
+        return 0;
+    }
+    // TODO: test if mutex is needed
+    if (pte_young(*ptep)) {
+        if(!contains(pfn_to_nid(pte_pfn(*ptep)), DRAM_MODE)) {
+            found_addrs[0].addr++;
+        }
+        else if(!contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
+            found_addrs[1].addr++;
+    }
+
+    return 0;
+}
+
 
 
 /*
@@ -284,6 +302,7 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
 out:
     return last_pid;
 }
+
 static int dram_walk(int n) {
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_mem};
 
@@ -340,10 +359,39 @@ static int nvram_walk(int n) {
     return -1;
 }
 
+static int balance_walk(int n, int *mode) {
+    struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_bal};
+
+    found_addrs[0].addr = 0;
+    found_addrs[1].addr = 0;
+
+    int i;
+    for (i=0; i < n_pids; i++) {
+
+        mm = task_items[i]->mm;
+        spin_lock(&mm->page_table_lock);
+        curr_pid = task_items[i]->pid;
+        walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+        spin_unlock(&mm->page_table_lock);
+    }
+
+    int dram_found = found_addrs[0].addr;
+    int nvram_found = found_addrs[1].addr;
+
+    if(dram_found > nvram_found) {
+        *mode = DRAM_MODE;
+        return dram_found - nvram_found;
+    else {
+        *mode = NVRAM_MODE;
+        return nvram_found - dram_found;
+
+}
+
 static int switch_walk(int n) {
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_nvram};
 
     n_to_find = n;
+    n_backup = 0;
     found_last = 0;
 
     last_pid_nvram = do_page_walk(mem_walk_ops, last_pid_nvram, last_addr_nvram);
@@ -477,6 +525,16 @@ static void process_req(req_t *req) {
                             break;
                         case SWITCH_MODE:
                             ret = switch_walk(req->pid_n);
+                            break;
+                        case BALANCE_MODE:
+                            int mode;
+                            int n = balance_walk(req->pid_n, &mode);
+
+                            if (mode == DRAM_MODE) {
+                                ret = dram_walk(n);
+                            else {
+                                ret = nvram_walk(n);
+                            found_addrs[n_found++].pid_retval = -mode;
                             break;
                         default:
                             pr_info("PLACEMENT: Unrecognized mode.\n");

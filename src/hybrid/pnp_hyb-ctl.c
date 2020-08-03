@@ -36,8 +36,9 @@ struct msghdr msg_out, msg_in;
 volatile int exit_sig = 0;
 volatile int switch_act = 1;
 volatile int thresh_act = 1;
+volatile int balance_act = 1;
 
-pthread_t stdin_thread, socket_thread, threshold_thread, switch_thread;
+pthread_t stdin_thread, socket_thread, threshold_thread, switch_thread, balance_thread;
 pthread_mutex_t comm_lock, placement_lock;
 
 void configure_netlink_addr() {
@@ -213,14 +214,15 @@ int do_migration(int mode, int n_found) {
     return n_migrated - e;
 }
 
-int do_switch (int n_found) {
-    void **addr_dram = malloc(sizeof(unsigned long) * n_found);
-    int *dest_nodes_dram = malloc(sizeof(int) * n_found);
-    void **addr_nvram = malloc(sizeof(unsigned long) * n_found);
-    int *dest_nodes_nvram = malloc(sizeof(int) * n_found);
-    int *status = malloc(sizeof(int) * n_found);
+int do_switch(int dram_found, nvram_found) {
+    void **addr_dram = malloc(sizeof(unsigned long) * dram_found);
+    int *dest_nodes_dram = malloc(sizeof(int) * dram_found);
+    void **addr_nvram = malloc(sizeof(unsigned long) * nvram_found);
+    int *dest_nodes_nvram = malloc(sizeof(int) * nvram_found);
+    int max_found = max(dram_found, nvram_found);
+    int *status = malloc(sizeof(int) * max_found);
 
-    for (int i=0; i< n_found; i++) {
+    for (int i=0; i< max_found; i++) {
         status[i] = -123;
     }
 
@@ -229,12 +231,12 @@ int do_switch (int n_found) {
     int dram_e = 0; // counts failed migrations
     int nvram_e = 0; // counts failed migrations
 
-    while ((dram_migrated < n_found) || (nvram_migrated < n_found)) {
+    while ((dram_migrated < dram_found) || (nvram_migrated < nvram_found)) {
         // DRAM -> NVRAM
         int old_n_processed = dram_migrated + dram_e;
         int dram_processed = old_n_processed;
 
-        for (int i=0; (i < n_nvram_nodes) && (dram_processed < n_found); i++) {
+        for (int i=0; (i < n_nvram_nodes) && (dram_processed < dram_found); i++) {
             int curr_node = NVRAM_NODES[i];
 
             long long node_fr = 0;
@@ -242,8 +244,8 @@ int do_switch (int n_found) {
             int n_avail_pages = node_fr/page_size;
 
             int j=0;
-            for (; (j < n_avail_pages) && (j+dram_processed < n_found); j++) {
-                addr_dram[dram_processed+j] = (void *) candidates[n_found+1+j].addr;
+            for (; (j < n_avail_pages) && (j+dram_processed < dram_found); j++) {
+                addr_dram[dram_processed+j] = (void *) candidates[dram_found+1+j].addr;
                 dest_nodes_nvram[dram_processed+j] = curr_node;
             }
 
@@ -255,9 +257,9 @@ int do_switch (int n_found) {
 
             for (n_migrated=0, i=0; n_migrated < dram_processed; n_migrated+=i) {
                 int curr_pid;
-                curr_pid = candidates[n_found+1+n_migrated].pid_retval;
+                curr_pid = candidates[dram_found+1+n_migrated].pid_retval;
 
-                for (i=1; (candidates[n_found+1+n_migrated+i].pid_retval == curr_pid) && (n_migrated+i < dram_processed); i++);
+                for (i=1; (candidates[dram_found+1+n_migrated+i].pid_retval == curr_pid) && (n_migrated+i < dram_processed); i++);
                 void **addr_displacement = addr_dram + n_migrated;
                 int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
                 if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement, dest_nodes_displacement, status, 0)) {
@@ -278,7 +280,7 @@ int do_switch (int n_found) {
         old_n_processed = nvram_migrated + nvram_e;
         int nvram_processed = old_n_processed;
 
-        for (int i=0; (i < n_dram_nodes) && (nvram_processed < n_found); i++) {
+        for (int i=0; (i < n_dram_nodes) && (nvram_processed < nvram_found); i++) {
             int curr_node = DRAM_NODES[i];
 
             long long node_fr = 0;
@@ -286,7 +288,7 @@ int do_switch (int n_found) {
             int n_avail_pages = node_fr/page_size;
 
             int j=0;
-            for (; (j < n_avail_pages) && (j+nvram_processed < n_found); j++) {
+            for (; (j < n_avail_pages) && (j+nvram_processed < nvram_found); j++) {
                 addr_nvram[nvram_processed+j] = (void *) candidates[nvram_processed+j].addr;
                 dest_nodes_dram[nvram_processed+j] = curr_node;
             }
@@ -325,6 +327,7 @@ int do_switch (int n_found) {
     free(dest_nodes_dram);
     free(dest_nodes_nvram);
     free(status);
+
     return dram_migrated + nvram_migrated;
 }
 
@@ -352,10 +355,34 @@ int send_find(int n_pages, int mode) {
             return do_migration(NVRAM_MODE, n_found);
             break;
         case SWITCH_MODE:
-            return do_switch (n_found);
+            return do_switch(n_found, n_found);
+            break;
+        case BALANCE_MODE:
+            int bal_mode = DRAM_MODE;
+            if (candidates[n_found].pid_retval == -NVRAM_MODE) {
+                bal_mode = NVRAM_MODE;
+            }
+            return do_migration(bal_mode, n_found);
             break;
     }
     return 0;
+}
+
+void *balance_placement(void *args) {
+    while (!exit_sig) {
+        if (balance_act) {
+            pthread_mutex_lock(&placement_lock);
+            int n_balanced = send_find(MAX_N_FIND - 1, BALANCE_MODE);
+            if (n_balanced > 0) {
+                printf("DRAM<->NVRAM: Balanced %d out of %d pages.\n", n_balanced, (int) MAX_N_FIND - 1);
+            }
+            pthread_mutex_unlock(&placement_lock);
+        }
+
+        sleep(BALANCE_INTERVAL);
+    }
+
+    return NULL;
 }
 
 void *switch_placement(void *args) {
@@ -527,6 +554,20 @@ void *process_stdin(void *args) {
             }
         }
 
+        else if (!strcmp(substring, "bal")) {
+            if ((substring = strtok(NULL, " ")) == NULL) {
+                fprintf(stderr, "Invalid argument for balance command.\n");
+                continue;
+            }
+            long n = strtol(substring, NULL, 10);
+            pthread_mutex_lock(&placement_lock);
+            int n_balanced = send_find(n, BALANCE_MODE);
+            pthread_mutex_unlock(&placement_lock);
+            if (n_balanced > 0) {
+                printf("DRAM<->NVRAM: Balanced %d out of %d pages.\n", n_balanced, (int) n);
+            }
+        }
+
         else if (!strcmp(substring, "toggle")) {
             if ((substring = strtok(NULL, " ")) == NULL) {
                 fprintf(stderr, "Invalid argument for toggle command.\n");
@@ -552,9 +593,20 @@ void *process_stdin(void *args) {
                     printf("Threshold component turned OFF\n");
                 }
             }
+            else if (!strcmp(substring, "balance\n")) {
+                balance_act = 1 - balance_act;
+
+                if (balance_act) {
+                    printf("Balance component turned ON\n");
+                }
+                else {
+                    printf("Balance component turned OFF\n");
+                }
+            }
             else if (!strcmp(substring, "all\n")) {
                 switch_act = 1 - switch_act;
                 thresh_act = 1 - thresh_act;
+                balance_act = 1 - balance_act;
 
                 if (switch_act) {
                     printf("Switch component turned ON\n");
@@ -568,6 +620,13 @@ void *process_stdin(void *args) {
                 }
                 else {
                     printf("Threshold component turned OFF\n");
+                }
+
+                if (balance_act) {
+                    printf("Balance component turned ON\n");
+                }
+                else {
+                    printf("Balance component turned OFF\n");
                 }
             }
         }
@@ -583,7 +642,8 @@ void *process_stdin(void *args) {
                     "\tunbind [pid]\n"
                     "\tDEBUG: send [n] [dram|nvram]\n"
                     "\tDEBUG: switch [n]\n"
-                    "\tDEBUG: toggle [switch|thresh|all]\n"
+                    "\tDEBUG: balance [n]\n"
+                    "\tDEBUG: toggle [switch|thresh|balance|all]\n"
                     "\tDEBUG: clear\n"
                     "\texit\n");
 
@@ -738,12 +798,17 @@ int main() {
         fprintf(stderr, "Error spawning switch thread: %s\n", strerror(errno));
     }
 
+    else if (pthread_create(&balance_thread, NULL, balance_placement, NULL)) {
+        fprintf(stderr, "Error spawning balance thread: %s\n", strerror(errno));
+    }
+
     else {
         pthread_join(stdin_thread, NULL);
         printf("Exiting ctl...\n");
         pthread_join(socket_thread, NULL);
         pthread_join(threshold_thread, NULL);
         pthread_join(switch_thread, NULL);
+        pthread_join(balance_thread, NULL);
 
         pthread_mutex_destroy(&comm_lock);
         pthread_mutex_destroy(&placement_lock);

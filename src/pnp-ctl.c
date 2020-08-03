@@ -213,7 +213,7 @@ int do_migration(int mode, int n_found) {
     return n_migrated - e;
 }
 
-int do_switch (int n_found) {
+int do_switch(int n_found) {
     void **addr_dram = malloc(sizeof(unsigned long) * n_found);
     int *dest_nodes_dram = malloc(sizeof(int) * n_found);
     void **addr_nvram = malloc(sizeof(unsigned long) * n_found);
@@ -352,7 +352,7 @@ int send_find(int n_pages, int mode) {
             return do_migration(NVRAM_MODE, n_found);
             break;
         case SWITCH_MODE:
-            return do_switch (n_found);
+            return do_switch(n_found);
             break;
     }
     return 0;

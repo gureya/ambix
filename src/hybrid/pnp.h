@@ -8,6 +8,7 @@
 #define DRAM_MODE 0
 #define NVRAM_MODE 1
 #define SWITCH_MODE 2
+#define BALANCE_MODE 3
 #define MAX_N_FIND MAX_N_PER_PACKET * MAX_PACKETS - 1 // Amount of pages that fit in exactly MAX_PACKETS netlink packets making space for retval struct (end struct)
 #define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
@@ -58,6 +59,7 @@ typedef struct req {
 #define DRAM_THRESH_NEGATIVE 0.15
 #define MEMCHECK_INTERVAL 2
 #define SWITCH_INTERVAL 5
+#define BALANCE_INTERVAL 6
 
 
 // Memory ranges: (64-bit systems only use 48-bit)
