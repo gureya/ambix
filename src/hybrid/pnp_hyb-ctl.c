@@ -460,7 +460,8 @@ void *process_stdin(void *args) {
             "\tunbind [pid]\n"
             "\tDEBUG: send [n] [dram|nvram]\n"
             "\tDEBUG: switch [n]\n"
-            "\tDEBUG: toggle [switch|thresh|all]\n"
+            "\tDEBUG: bal [n]\n"
+            "\tDEBUG: toggle [switch|thresh|bal|all]\n"
             "\tDEBUG: clear\n"
             "\texit\n");
 
@@ -593,7 +594,7 @@ void *process_stdin(void *args) {
                     printf("Threshold component turned OFF\n");
                 }
             }
-            else if (!strcmp(substring, "balance\n")) {
+            else if (!strcmp(substring, "bal\n")) {
                 balance_act = 1 - balance_act;
 
                 if (balance_act) {
@@ -642,8 +643,8 @@ void *process_stdin(void *args) {
                     "\tunbind [pid]\n"
                     "\tDEBUG: send [n] [dram|nvram]\n"
                     "\tDEBUG: switch [n]\n"
-                    "\tDEBUG: balance [n]\n"
-                    "\tDEBUG: toggle [switch|thresh|balance|all]\n"
+                    "\tDEBUG: bal [n]\n"
+                    "\tDEBUG: toggle [switch|thresh|bal|all]\n"
                     "\tDEBUG: clear\n"
                     "\texit\n");
 

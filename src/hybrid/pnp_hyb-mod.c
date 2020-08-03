@@ -359,7 +359,7 @@ static int nvram_walk(int n) {
     return -1;
 }
 
-static int balance_walk(int n, int *mode) {
+static int balance_walk(int *mode) {
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_bal};
 
     found_addrs[0].addr = 0;
@@ -526,10 +526,13 @@ static void process_req(req_t *req) {
                         case SWITCH_MODE:
                             ret = switch_walk(req->pid_n);
                             break;
-                        case BALANCE_MODE:
+                        case BALANCE_MODE: ;
                             int mode;
-                            int n = balance_walk(req->pid_n, &mode);
+                            int n = balance_walk(&mode);
 
+                            if(n > req->pid_n) {
+                                n = req->pid_n;
+                            }
                             if (mode == DRAM_MODE) {
                                 ret = dram_walk(n);
                             else {
