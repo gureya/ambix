@@ -214,12 +214,12 @@ int do_migration(int mode, int n_found) {
     return n_migrated - e;
 }
 
-int do_switch(int dram_found, nvram_found) {
+int do_switch(int dram_found, int nvram_found) {
     void **addr_dram = malloc(sizeof(unsigned long) * dram_found);
     int *dest_nodes_dram = malloc(sizeof(int) * dram_found);
     void **addr_nvram = malloc(sizeof(unsigned long) * nvram_found);
     int *dest_nodes_nvram = malloc(sizeof(int) * nvram_found);
-    int max_found = max(dram_found, nvram_found);
+    int max_found = fmax(dram_found, nvram_found);
     int *status = malloc(sizeof(int) * max_found);
 
     for (int i=0; i< max_found; i++) {
@@ -357,7 +357,7 @@ int send_find(int n_pages, int mode) {
         case SWITCH_MODE:
             return do_switch(n_found, n_found);
             break;
-        case BALANCE_MODE:
+        case BALANCE_MODE: ; // Empty statement because labels must be followed by a statement (not declaration)
             int bal_mode = DRAM_MODE;
             if (candidates[n_found].pid_retval == -NVRAM_MODE) {
                 bal_mode = NVRAM_MODE;
