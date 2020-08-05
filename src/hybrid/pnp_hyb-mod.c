@@ -238,6 +238,7 @@ static int pte_callback_bal(pte_t *ptep, unsigned long addr, unsigned long next,
         }
         else if(!contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
             found_addrs[1].addr++;
+        }
     }
 
     return 0;
@@ -360,6 +361,7 @@ static int nvram_walk(int n) {
 }
 
 static int balance_walk(int *mode) {
+    struct mm_struct *mm;
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_bal};
 
     found_addrs[0].addr = 0;
@@ -381,9 +383,10 @@ static int balance_walk(int *mode) {
     if(dram_found > nvram_found) {
         *mode = DRAM_MODE;
         return dram_found - nvram_found;
-    else {
+    } else {
         *mode = NVRAM_MODE;
         return nvram_found - dram_found;
+    }
 
 }
 
@@ -535,8 +538,9 @@ static void process_req(req_t *req) {
                             }
                             if (mode == DRAM_MODE) {
                                 ret = dram_walk(n);
-                            else {
+                            } else {
                                 ret = nvram_walk(n);
+                            }
                             found_addrs[n_found++].pid_retval = -mode;
                             break;
                         default:
