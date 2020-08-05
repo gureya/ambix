@@ -195,6 +195,35 @@ static int pte_callback_mem(pte_t *ptep, unsigned long addr, unsigned long next,
     return 0;
 }
 
+static int pte_callback_mem_force(pte_t *ptep, unsigned long addr, unsigned long next,
+                        struct mm_walk *walk) {
+
+    // If already found n pages, page is not present or page is not in DRAM node
+    if ((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || !contains(pfn_to_nid(pte_pfn(*ptep)), DRAM_MODE)) {
+        if ((n_found == n_to_find) && !found_last) { // found all + last
+            last_addr_dram = addr;
+            found_last = 1;
+        }
+        return 0;
+    }
+
+    if (!pte_dirty(*ptep)) {
+
+        // Send to NVRAM
+        found_addrs[n_found].addr = addr;
+        found_addrs[n_found++].pid_retval = curr_pid;
+    }
+    else {
+        // Add to backup list
+        if (n_backup < n_to_find) {
+            backup_addrs[n_backup].addr = addr;
+            backup_addrs[n_backup++].pid_retval = curr_pid;
+        }
+    }
+
+    return 0;
+}
+
 static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
 
@@ -225,19 +254,57 @@ static int pte_callback_nvram(pte_t *ptep, unsigned long addr, unsigned long nex
     return 0;
 }
 
+static int pte_callback_nvram_force(pte_t *ptep, unsigned long addr, unsigned long next,
+                        struct mm_walk *walk) {
+
+    // If already found n pages, page is not present or page is not in NVRAM node
+    if ((ptep == NULL) || (n_found >= n_to_find) || !pte_present(*ptep) || !pte_write(*ptep) || !contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
+        if ((n_found == n_to_find) && !found_last) { // found all + last
+            last_addr_nvram = addr;
+            found_last = 1;
+        }
+        return 0;
+    }
+
+    if (pte_young(*ptep)) {
+        if (pte_dirty(*ptep)) {
+            // Send to DRAM (priority)
+            found_addrs[n_found].addr = addr;
+            found_addrs[n_found++].pid_retval = curr_pid;
+        }
+        else {
+            // Add to backup list
+            if (n_backup < (n_to_find - n_found)) {
+                backup_addrs[n_backup].addr = addr;
+                backup_addrs[n_backup++].pid_retval = curr_pid;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int pte_callback_bal(pte_t *ptep, unsigned long addr, unsigned long next,
                         struct mm_walk *walk) {
 
     if ((ptep == NULL) || !pte_present(*ptep)) {
         return 0;
     }
-    // TODO: test if mutex is needed
+    // TODO: test if mutex is needed (update: not needed)
     if (pte_young(*ptep)) {
-        if(!contains(pfn_to_nid(pte_pfn(*ptep)), DRAM_MODE)) {
-            found_addrs[0].addr++;
+        if(contains(pfn_to_nid(pte_pfn(*ptep)), DRAM_MODE)) {
+            if(!pte_write(*ptep)) {
+                found_addrs[2].addr++;
+            } else {
+                found_addrs[0].addr++;
+            }
         }
-        else if(!contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
-            found_addrs[1].addr++;
+        else if(contains(pfn_to_nid(pte_pfn(*ptep)), NVRAM_MODE)) {
+            if(!pte_write(*ptep)) {
+                found_addrs[3].addr++;
+            } else {
+                found_addrs[1].addr++;
+            }
         }
     }
 
@@ -331,9 +398,64 @@ static int dram_walk(int n) {
     }
     return -1;
 }
+static int dram_walk_force(int n) {
+    struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_mem_force};
+
+    n_to_find = n;
+    n_backup = 0;
+    found_last = 0;
+
+    last_pid_dram = do_page_walk(mem_walk_ops, last_pid_dram, last_addr_dram);
+
+    if (n_found >= n_to_find) {
+        return 0;
+    }
+    else if (n_backup > 0) {
+        int remaining = n_to_find - n_found;
+        int i;
+
+        for (i=0; (i < remaining) && (i < n_backup); i++) {
+            found_addrs[n_found].addr = backup_addrs[i].addr;
+            found_addrs[n_found++].pid_retval = backup_addrs[i].pid_retval;
+        }
+
+        if (n_found >= n_to_find) {
+            return 0;
+        }
+    }
+    return -1;
+}
 
 static int nvram_walk(int n) {
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_nvram};
+
+    n_to_find = n;
+    n_backup = 0;
+    found_last = 0;
+
+    last_pid_nvram = do_page_walk(mem_walk_ops, last_pid_nvram, last_addr_nvram);
+
+    if (n_found >= n_to_find) {
+        return 0;
+    }
+    else if (n_backup > 0) {
+        int remaining = n_to_find - n_found;
+        int i;
+
+        for (i=0; (i < remaining) && (i < n_backup); i++) {
+            found_addrs[n_found].addr = backup_addrs[i].addr;
+            found_addrs[n_found++].pid_retval = backup_addrs[i].pid_retval;
+        }
+
+        if (n_found >= n_to_find) {
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int nvram_walk_force(int n) {
+    struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_nvram_force};
 
     n_to_find = n;
     n_backup = 0;
@@ -366,6 +488,8 @@ static int balance_walk(int *mode) {
 
     found_addrs[0].addr = 0;
     found_addrs[1].addr = 0;
+    found_addrs[2].addr = 0;
+    found_addrs[3].addr = 0;
 
     int i;
     for (i=0; i < n_pids; i++) {
@@ -379,13 +503,23 @@ static int balance_walk(int *mode) {
 
     int dram_found = found_addrs[0].addr;
     int nvram_found = found_addrs[1].addr;
+    int dram_wrp = found_addrs[2].addr;
+    int nvram_wrp = found_addrs[3].addr;
+    int dram_tot = found_addrs[0].addr + found_addrs[2].addr;
+    int nvram_tot = found_addrs[1].addr + found_addrs[3].addr;
+    int imbalance = 0;
 
-    if(dram_found > nvram_found) {
+    printk("DRAM FOUND: (t:%d, nwrp:%d, wrp:%d) , NVRAM FOUND: (t:%d, nwrp:%d, wrp:%d)\n",
+            dram_tot, dram_found, dram_wrp, nvram_tot, nvram_found, nvram_wrp);
+
+    if(dram_tot > nvram_tot) {
         *mode = DRAM_MODE;
-        return dram_found - nvram_found;
+        imbalance = (dram_tot - nvram_tot) / 2;
+        return (imbalance > dram_found) ? dram_found : imbalance;
     } else {
         *mode = NVRAM_MODE;
-        return nvram_found - dram_found;
+        imbalance = (nvram_tot - dram_tot) / 2;
+        return (imbalance > nvram_found) ? nvram_found : imbalance;
     }
 
 }
@@ -537,9 +671,9 @@ static void process_req(req_t *req) {
                                 n = req->pid_n;
                             }
                             if (mode == DRAM_MODE) {
-                                ret = dram_walk(n);
+                                ret = dram_walk_force(n);
                             } else {
-                                ret = nvram_walk(n);
+                                ret = nvram_walk_force(n);
                             }
                             found_addrs[n_found++].pid_retval = -mode;
                             break;
