@@ -14,8 +14,8 @@
 
 
 // Node definition: DRAM nodes' (memory mode) ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
-static const int DRAM_NODES[] = {0,1};
-static const int NVRAM_NODES[] = {2,3};
+static const int DRAM_NODES[] = {0};
+static const int NVRAM_NODES[] = {2};
 
 static const int n_dram_nodes = sizeof(DRAM_NODES)/sizeof(DRAM_NODES[0]);
 static const int n_nvram_nodes = sizeof(NVRAM_NODES)/sizeof(NVRAM_NODES[0]);
@@ -57,9 +57,10 @@ typedef struct req {
 #define DRAM_TARGET 0.80
 #define DRAM_THRESH_PLUS 0.05
 #define DRAM_THRESH_NEGATIVE 0.15
-#define MEMCHECK_INTERVAL 2
-#define SWITCH_INTERVAL 5
-#define BALANCE_INTERVAL 6
+#define MEMCHECK_INTERVAL 5
+#define SWITCH_INTERVAL 9
+#define BALANCE_INTERVAL 11
+#define BALANCE_WEIGHT 3
 
 
 // Memory ranges: (64-bit systems only use 48-bit)

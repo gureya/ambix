@@ -39,7 +39,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Bandwidth-aware page replacement");
 MODULE_VERSION("0.3");
-MODULE_INFO(vermagic, "5.6.14-patched SMP mod_unload modversions ");
+MODULE_INFO(vermagic, "5.8.5-patched SMP mod_unload modversions ");
 
 struct sock *nl_sock;
 
@@ -398,6 +398,7 @@ static int dram_walk(int n) {
     }
     return -1;
 }
+
 static int dram_walk_force(int n) {
     struct mm_walk_ops mem_walk_ops = {.pte_entry = pte_callback_mem_force};
 
@@ -507,19 +508,19 @@ static int balance_walk(int *mode) {
     int nvram_wrp = found_addrs[3].addr;
     int dram_tot = found_addrs[0].addr + found_addrs[2].addr;
     int nvram_tot = found_addrs[1].addr + found_addrs[3].addr;
-    int imbalance = 0;
+    int tot_pages = dram_tot + nvram_tot;
+    int dram_optimal = tot_pages * BALANCE_WEIGHT / (1 + BALANCE_WEIGHT) ;
+    int dram_imbalance = dram_tot - dram_optimal;
 
     printk("DRAM FOUND: (t:%d, nwrp:%d, wrp:%d) , NVRAM FOUND: (t:%d, nwrp:%d, wrp:%d)\n",
             dram_tot, dram_found, dram_wrp, nvram_tot, nvram_found, nvram_wrp);
 
-    if(dram_tot > nvram_tot) {
+    if(dram_imbalance > 0) {
         *mode = DRAM_MODE;
-        imbalance = (dram_tot - nvram_tot) / 2;
-        return (imbalance > dram_found) ? dram_found : imbalance;
+        return (dram_imbalance > dram_found) ? dram_found : dram_imbalance;
     } else {
         *mode = NVRAM_MODE;
-        imbalance = (nvram_tot - dram_tot) / 2;
-        return (imbalance > nvram_found) ? nvram_found : imbalance;
+        return (-dram_imbalance > nvram_found) ? nvram_found : -dram_imbalance;
     }
 
 }
@@ -671,7 +672,7 @@ static void process_req(req_t *req) {
                                 n = req->pid_n;
                             }
                             if (mode == DRAM_MODE) {
-                                ret = dram_walk_force(n);
+                                ret = dram_walk(n);
                             } else {
                                 ret = nvram_walk_force(n);
                             }
