@@ -60,6 +60,8 @@ typedef struct req {
 #define MEMCHECK_INTERVAL 5
 #define SWITCH_INTERVAL 9
 #define BALANCE_INTERVAL 11
+#define MAX_INTERVAL_MUL 3
+#define INTERVAL_INC_FACTOR 0.5
 #define BALANCE_WEIGHT 3
 
 

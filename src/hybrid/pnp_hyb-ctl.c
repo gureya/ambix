@@ -38,6 +38,10 @@ volatile int switch_act = 1;
 volatile int thresh_act = 1;
 volatile int balance_act = 1;
 
+int memcheck_interval = MEMCHECK_INTERVAL;
+int switch_interval = SWITCH_INTERVAL;
+int balance_interval = BALANCE_INTERVAL;
+
 pthread_t stdin_thread, socket_thread, threshold_thread, switch_thread, balance_thread;
 pthread_mutex_t comm_lock, placement_lock;
 
@@ -373,13 +377,18 @@ void *balance_placement(void *args) {
         if (balance_act) {
             pthread_mutex_lock(&placement_lock);
             int n_balanced = send_find(MAX_N_FIND - 1, BALANCE_MODE);
+            pthread_mutex_unlock(&placement_lock);
+
             if (n_balanced > 0) {
                 printf("DRAM<->NVRAM: Balanced %d out of %d pages.\n", n_balanced, (int) MAX_N_FIND - 1);
+                balance_interval = BALANCE_INTERVAL;
             }
-            pthread_mutex_unlock(&placement_lock);
+            else {
+                balance_interval = fmin(balance_interval * (1 + INTERVAL_INC_FACTOR), BALANCE_INTERVAL * MAX_INTERVAL_MUL;
+            }
         }
 
-        sleep(BALANCE_INTERVAL);
+        sleep(balance_interval);
     }
 
     return NULL;
@@ -390,13 +399,18 @@ void *switch_placement(void *args) {
         if (switch_act) {
             pthread_mutex_lock(&placement_lock);
             int n_switched = send_find(MAX_N_SWITCH, SWITCH_MODE);
+            pthread_mutex_unlock(&placement_lock);
+
             if (n_switched > 0) {
                 printf("DRAM<->NVRAM: Switched %d out of %d pages.\n", n_switched, (int) MAX_N_SWITCH*2);
+                switch_interval = SWITCH_INTERVAL;
             }
-            pthread_mutex_unlock(&placement_lock);
+            else {
+                switch_interval = fmin(switch_interval * (1 + INTERVAL_INC_FACTOR), SWITCH_INTERVAL * MAX_INTERVAL_MUL;
+            }
         }
 
-        sleep(SWITCH_INTERVAL);
+        sleep(switch_interval);
     }
 
     return NULL;
@@ -442,9 +456,17 @@ void *threshold_placement(void *args) {
                 }
             }
             pthread_mutex_unlock(&placement_lock);
+
+            if (n_migrated > 0) {
+                memcheck_interval = MEMCHECK_INTERVAL;
+            }
+            else {
+                memcheck_interval = fmin(memcheck_interval * (1 + INTERVAL_INC_FACTOR), MEMCHECK_INTERVAL * MAX_INTERVAL_MUL;
+            }
+
         }
 
-        sleep(MEMCHECK_INTERVAL);
+        sleep(memcheck_interval);
     }
 
     return NULL;
