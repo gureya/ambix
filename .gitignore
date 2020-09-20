@@ -6,6 +6,12 @@ socket
 # Prerequisites
 *.d
 
+outputs
+pmbench
+pmbench-pnp
+tests
+*.sh
+
 blackscholes
 coremark
 stress_test

@@ -656,7 +656,7 @@ static void process_req(req_t *req) {
                 if (n_pids>0) {
                     switch (req->mode) {
                         case DRAM_MODE:
-                            ret = dram_walk(req->pid_n);
+                            ret = dram_walk_force(req->pid_n);
                             break;
                         case NVRAM_MODE:
                             ret = nvram_walk(req->pid_n);

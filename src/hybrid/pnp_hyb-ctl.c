@@ -384,7 +384,7 @@ void *balance_placement(void *args) {
                 balance_interval = BALANCE_INTERVAL;
             }
             else {
-                balance_interval = fmin(balance_interval * (1 + INTERVAL_INC_FACTOR), BALANCE_INTERVAL * MAX_INTERVAL_MUL;
+                balance_interval = fmin(balance_interval * (1 + INTERVAL_INC_FACTOR), BALANCE_INTERVAL * MAX_INTERVAL_MUL);
             }
         }
 
@@ -406,7 +406,7 @@ void *switch_placement(void *args) {
                 switch_interval = SWITCH_INTERVAL;
             }
             else {
-                switch_interval = fmin(switch_interval * (1 + INTERVAL_INC_FACTOR), SWITCH_INTERVAL * MAX_INTERVAL_MUL;
+                switch_interval = fmin(switch_interval * (1 + INTERVAL_INC_FACTOR), SWITCH_INTERVAL * MAX_INTERVAL_MUL);
             }
         }
 
@@ -424,6 +424,7 @@ void *threshold_placement(void *args) {
 
     while (!exit_sig) {
         if (thresh_act) {
+            int n_migrated = 0;
 
             for (int i=0; i < n_dram_nodes; i++) {
                 long long node_fr = 0;
@@ -440,7 +441,7 @@ void *threshold_placement(void *args) {
                 long long n_bytes = (usage - DRAM_TARGET) * total_node_sz;
                 n_pages = ceil(n_bytes/page_size);
                 n_pages = fmin(n_pages, MAX_N_FIND);
-                int n_migrated = send_find(n_pages, DRAM_MODE);
+                n_migrated = send_find(n_pages, DRAM_MODE);
                 if (n_migrated > 0) {
                     printf("DRAM->NVRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
                 }
@@ -450,7 +451,7 @@ void *threshold_placement(void *args) {
                 int n_bytes = (DRAM_TARGET - usage) * total_node_sz;
                 n_pages = ceil(n_bytes/page_size);
                 n_pages = fmin(n_pages, MAX_N_FIND);
-                int n_migrated = send_find(n_pages, NVRAM_MODE);
+                n_migrated = send_find(n_pages, NVRAM_MODE);
                 if (n_migrated > 0) {
                     printf("NVRAM->DRAM: Migrated %d out of %d pages.\n", n_migrated, n_pages);
                 }
@@ -461,7 +462,7 @@ void *threshold_placement(void *args) {
                 memcheck_interval = MEMCHECK_INTERVAL;
             }
             else {
-                memcheck_interval = fmin(memcheck_interval * (1 + INTERVAL_INC_FACTOR), MEMCHECK_INTERVAL * MAX_INTERVAL_MUL;
+                memcheck_interval = fmin(memcheck_interval * (1 + INTERVAL_INC_FACTOR), MEMCHECK_INTERVAL * MAX_INTERVAL_MUL);
             }
 
         }
