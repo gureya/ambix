@@ -1,16 +1,18 @@
 #ifndef _PNP_H
 #define _PNP_H
 
+#include "pcm-pnp.h"
+
 #define MAX_PIDS 5
 #define MAX_PID_N 2147483647 // set to INT_MAX. true max pid number is shown in /proc/sys/kernel/pid_max
 
 // Find-related constants:
 #define DRAM_MODE 0
 #define NVRAM_MODE 1
-#define SWITCH_MODE 2
-#define BALANCE_MODE 3
+#define NVRAM_WRITE_MODE 2
+#define BALANCE_DRAM_MODE 3
+#define BALANCE_NVRAM_MODE 4
 #define MAX_N_FIND MAX_N_PER_PACKET * MAX_PACKETS - 1 // Amount of pages that fit in exactly MAX_PACKETS netlink packets making space for retval struct (end struct)
-#define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
 
 // Node definition: DRAM nodes' (memory mode) ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
@@ -54,16 +56,23 @@ typedef struct req {
 
 // Misc:
 #define MAX_COMMAND_SIZE 80
-#define DRAM_TARGET 0.80
-#define DRAM_THRESH_PLUS 0.05
-#define DRAM_THRESH_NEGATIVE 0.15
-#define MEMCHECK_INTERVAL 5
-#define SWITCH_INTERVAL 9
-#define BALANCE_INTERVAL 11
+#define DRAM_TARGET 0.95
+#define DRAM_LIMIT 0.96
+#define NVRAM_TARGET 0.95
+#define NVRAM_LIMIT 0.98
+#define MEMCHECK_INTERVAL PCM_DELAY
 #define MAX_INTERVAL_MUL 3
-#define INTERVAL_INC_FACTOR 0.5
-#define BALANCE_WEIGHT 3
+#define INTERVAL_INC_FACTOR 1.0
 
+//BW info (All reads, intra-socket, obtained with mlc):
+#define BW_TARGET 0.95
+#define DRAM_BW_MAX 39700
+#define NVRAM_BW_MAX 13500
+#define DRAM_BW_LIMIT DRAM_BW_MAX * BW_TARGET
+#define NVRAM_BW_LIMIT NVRAM_BW_MAX * BW_TARGET
+#define BW_RATIO DRAM_BW_LIMIT / NVRAM_BW_LIMIT
+#define BW_MARGIN 0.05
+#define NVRAM_BW_WR_THRESH 1
 
 // Memory ranges: (64-bit systems only use 48-bit)
 #define IS_64BIT (sizeof(void*) == 8)
@@ -71,7 +80,16 @@ typedef struct req {
 #define MAX_ADDRESS_ARM (IS_64BIT ? 0x800000000000UL : 0xC0000000UL) // Max user-space addresses for the ARM architecture
 
 
-// Helper function:
+// Helper functions:
+
+#define BETWEEN(value, min, max) (value <= max && value >= min)
+
+int int_min(int val1, int val2) {
+    if (val1 > val2) {
+        return val2;
+    }
+    return val1;
+}
 
 int contains(int value, int mode) {
     const int *array;

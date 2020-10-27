@@ -31,7 +31,7 @@ int bind_uds() {
     // }
     // #pragma GCC diagnostic pop
 
-    struct bitmask *bm;
+    /*struct bitmask *bm;
     int ncpus = numa_num_configured_cpus();
     bm = numa_bitmask_alloc(ncpus);
 
@@ -45,7 +45,7 @@ int bind_uds() {
     if(set_mempolicy(MPOL_BIND, bm->maskp, bm->size + 1)) {
         fprintf(stderr, "Error in set_mempolicy: %s\n", strerror(errno));
         return 0;
-    }
+    }*/
 
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));

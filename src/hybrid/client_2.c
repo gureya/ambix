@@ -44,12 +44,18 @@ int main() {
             printf("Exiting.\n");
             break;
         }
+        else if(c == 'r') {
+            int tmp;
+            for(int i=0; i<array_size; i++) {
+                tmp = a[i];
+            }
+        }
     }
 
     if(!unbind_uds()) {
         return 1;
     }
-    
+
     printf("UNBIND OK\n");
     return 0;
 }
