@@ -5,7 +5,8 @@
 
 int main() {
     int array_size = 180000000;
-    if(!bind_uds()) {
+    int pid = getpid();
+    if(!bind_uds(pid)) {
         return 1;
     }
     printf("BIND OK\n");
@@ -52,7 +53,7 @@ int main() {
         }
     }
 
-    if(!unbind_uds()) {
+    if(!unbind_uds(pid)) {
         return 1;
     }
 

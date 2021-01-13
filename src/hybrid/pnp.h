@@ -3,16 +3,30 @@
 
 #include "pcm-pnp.h"
 
+// Intervals and limits:
+
+#define MEMCHECK_INTERVAL PCM_DELAY * 1000
+#define NVRAMWRCHK_INTERVAL PCM_DELAY * 1000
+#define CLEAR_DELAY 50
+#define NVRAM_BW_THRESH 10
+
+// BW info (for checking pcm output)
+#define DRAM_BW_MAX 50000
+#define NVRAM_BW_MAX 20000
+
+// PID info
 #define MAX_PIDS 5
 #define MAX_PID_N 2147483647 // set to INT_MAX. true max pid number is shown in /proc/sys/kernel/pid_max
 
 // Find-related constants:
 #define DRAM_MODE 0
 #define NVRAM_MODE 1
-#define NVRAM_WRITE_MODE 2
-#define BALANCE_DRAM_MODE 3
-#define BALANCE_NVRAM_MODE 4
+#define NVRAM_INTENSIVE_MODE 2
+#define SWITCH_MODE 3
+#define NVRAM_CLEAR 4
+#define NVRAM_WRITE_MODE 5
 #define MAX_N_FIND MAX_N_PER_PACKET * MAX_PACKETS - 1 // Amount of pages that fit in exactly MAX_PACKETS netlink packets making space for retval struct (end struct)
+#define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
 
 // Node definition: DRAM nodes' (memory mode) ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
@@ -60,19 +74,8 @@ typedef struct req {
 #define DRAM_LIMIT 0.96
 #define NVRAM_TARGET 0.95
 #define NVRAM_LIMIT 0.98
-#define MEMCHECK_INTERVAL PCM_DELAY
-#define MAX_INTERVAL_MUL 3
+#define MAX_INTERVAL_MUL 1
 #define INTERVAL_INC_FACTOR 1.0
-
-//BW info (All reads, intra-socket, obtained with mlc):
-#define BW_TARGET 0.95
-#define DRAM_BW_MAX 39700
-#define NVRAM_BW_MAX 13500
-#define DRAM_BW_LIMIT DRAM_BW_MAX * BW_TARGET
-#define NVRAM_BW_LIMIT NVRAM_BW_MAX * BW_TARGET
-#define BW_RATIO DRAM_BW_LIMIT / NVRAM_BW_LIMIT
-#define BW_MARGIN 0.05
-#define NVRAM_BW_WR_THRESH 1
 
 // Memory ranges: (64-bit systems only use 48-bit)
 #define IS_64BIT (sizeof(void*) == 8)

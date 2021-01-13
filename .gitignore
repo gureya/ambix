@@ -2,9 +2,11 @@
 .history
 *.swp
 socket
+memdata
 .vscode
 # Prerequisites
 *.d
+*.x
 
 outputs
 pmbench

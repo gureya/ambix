@@ -13,13 +13,11 @@
 #include <errno.h>
 #include <unistd.h>
 
-int bind_uds() {
+int bind_uds(int pid) {
     // Unix domain socket
     struct sockaddr_un uds_addr;
     int unix_fd, w_ret;
     req_t bind_req;
-
-    int pid = getpid();
 
     // Keep process pages in primary memory (disables swapping for pages in a set of addresses)
     // False-positive implicit function declaration on mlock2()
@@ -83,13 +81,11 @@ int bind_uds() {
 }
 
 
-int unbind_uds() {
+int unbind_uds(int pid) {
     // Unix domain socket
     struct sockaddr_un uds_addr;
     int unix_fd, w_ret;
     req_t unbind_req;
-
-    int pid = getpid();
 
     // munlock(0, MAX_ADDRESS);
 
