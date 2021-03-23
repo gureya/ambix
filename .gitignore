@@ -9,6 +9,8 @@ memdata
 *.x
 *.data
 *.input
+numamma
+numammaOUT
 
 outputs
 pmbench
