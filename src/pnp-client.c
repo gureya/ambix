@@ -13,13 +13,11 @@
 #include <errno.h>
 #include <unistd.h>
 
-int bind_uds() {
+int bind_uds(int pid) {
     // Unix domain socket
     struct sockaddr_un uds_addr;
     int unix_fd, w_ret;
     req_t bind_req;
-
-    int pid = getpid();
 
     // Keep process pages in primary memory (disables swapping for pages in a set of addresses)
     // False-positive implicit function declaration on mlock2()
@@ -31,7 +29,7 @@ int bind_uds() {
     // }
     // #pragma GCC diagnostic pop
 
-    struct bitmask *bm;
+    /*struct bitmask *bm;
     int ncpus = numa_num_configured_cpus();
     bm = numa_bitmask_alloc(ncpus);
 
@@ -45,7 +43,7 @@ int bind_uds() {
     if(set_mempolicy(MPOL_BIND, bm->maskp, bm->size + 1)) {
         fprintf(stderr, "Error in set_mempolicy: %s\n", strerror(errno));
         return 0;
-    }
+    }*/
 
     if((unix_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
         fprintf(stderr, "Error creating UD socket: %s\n", strerror(errno));
@@ -83,13 +81,11 @@ int bind_uds() {
 }
 
 
-int unbind_uds() {
+int unbind_uds(int pid) {
     // Unix domain socket
     struct sockaddr_un uds_addr;
     int unix_fd, w_ret;
     req_t unbind_req;
-
-    int pid = getpid();
 
     // munlock(0, MAX_ADDRESS);
 

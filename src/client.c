@@ -4,7 +4,8 @@
 
 
 int main() {
-    if(!bind_uds()) {
+    int pid = getpid();
+    if(!bind_uds(pid)) {
         return 1;
     }
     printf("BIND OK\n");
@@ -19,12 +20,12 @@ int main() {
 
     printf("%d\n", a[0]);
 
-    if(!unbind_uds()) {
+    if(!unbind_uds(pid)) {
         return 1;
     }
 
     getchar();
-    
+
     printf("UNBIND OK\n");
     return 0;
 }

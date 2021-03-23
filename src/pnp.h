@@ -1,20 +1,36 @@
 #ifndef _PNP_H
 #define _PNP_H
 
+
+// Intervals and limits:
+
+#define MEMCHECK_INTERVAL PCM_DELAY * 1000
+#define NVRAMWRCHK_INTERVAL PCM_DELAY * 1000
+#define CLEAR_DELAY 50
+#define NVRAM_BW_THRESH 10
+
+// BW info (for checking pcm output)
+#define DRAM_BW_MAX 50000
+#define NVRAM_BW_MAX 20000
+
+// PID info
 #define MAX_PIDS 5
 #define MAX_PID_N 2147483647 // set to INT_MAX. true max pid number is shown in /proc/sys/kernel/pid_max
 
 // Find-related constants:
 #define DRAM_MODE 0
 #define NVRAM_MODE 1
-#define SWITCH_MODE 2
+#define NVRAM_INTENSIVE_MODE 2
+#define SWITCH_MODE 3
+#define NVRAM_CLEAR 4
+#define NVRAM_WRITE_MODE 5
 #define MAX_N_FIND MAX_N_PER_PACKET * MAX_PACKETS - 1 // Amount of pages that fit in exactly MAX_PACKETS netlink packets making space for retval struct (end struct)
 #define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
 
 
-// Node definition: DRAM nodes' ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
-static const int DRAM_NODES[]  = {0,1};
-static const int NVRAM_NODES[]  = {2,3};
+// Node definition: DRAM nodes' (memory mode) ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
+static const int DRAM_NODES[] = {0};
+static const int NVRAM_NODES[] = {2};
 
 static const int n_dram_nodes = sizeof(DRAM_NODES)/sizeof(DRAM_NODES[0]);
 static const int n_nvram_nodes = sizeof(NVRAM_NODES)/sizeof(NVRAM_NODES[0]);
@@ -53,12 +69,12 @@ typedef struct req {
 
 // Misc:
 #define MAX_COMMAND_SIZE 80
-#define DRAM_TARGET 0.80
-#define DRAM_THRESH_PLUS 0.05
-#define DRAM_THRESH_NEGATIVE 0.15
-#define MEMCHECK_INTERVAL 2
-#define SWITCH_INTERVAL 5
-
+#define DRAM_TARGET 0.95
+#define DRAM_LIMIT 0.96
+#define NVRAM_TARGET 0.95
+#define NVRAM_LIMIT 0.98
+#define MAX_INTERVAL_MUL 1
+#define INTERVAL_INC_FACTOR 1.0
 
 // Memory ranges: (64-bit systems only use 48-bit)
 #define IS_64BIT (sizeof(void*) == 8)
@@ -66,12 +82,21 @@ typedef struct req {
 #define MAX_ADDRESS_ARM (IS_64BIT ? 0x800000000000UL : 0xC0000000UL) // Max user-space addresses for the ARM architecture
 
 
-// Helper function:
+// Helper functions:
+
+#define BETWEEN(value, min, max) (value <= max && value >= min)
+
+int int_min(int val1, int val2) {
+    if (val1 > val2) {
+        return val2;
+    }
+    return val1;
+}
 
 int contains(int value, int mode) {
     const int *array;
     int size, i;
-    
+
     if(mode == NVRAM_MODE) {
         array = NVRAM_NODES;
         size = n_nvram_nodes;
