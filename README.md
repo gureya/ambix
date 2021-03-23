@@ -1,4 +1,4 @@
-# pnp
-Page Placement and Persistence Simulator
+# Ambix
+Dynamic page placement for Hybrid multi-tiered architectures.
 
-Thesis Project on extending placement and persistence mechanisms in order to consider an architecture that integrates Intel Optane Persistent Memory.
+Thesis Project on extending placement mechanisms in order to consider an architecture that integrates Intel Optane Persistent Memory.
