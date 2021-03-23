@@ -1,7 +1,6 @@
 #ifndef _PNP_H
 #define _PNP_H
 
-#include "pcm-pnp.h"
 
 // Intervals and limits:
 

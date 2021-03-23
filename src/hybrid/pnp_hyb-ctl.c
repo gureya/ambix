@@ -1,4 +1,5 @@
 #include "pnp.h"
+#include "pcm-pnp.h"
 
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -619,7 +620,7 @@ void *memcheck_placement(void *args) {
                     printf("DRAM->NVRAM: Migrated %d out of %d pages.\n", thresh_migrated, n_pages);
                 }
             }
-            else if ((nvram_usage > NVRAM_LIMIT) && (dram_usage < DRAM_TARGET)) {
+            else if (!switch_act && (nvram_usage > NVRAM_LIMIT) && (dram_usage < DRAM_TARGET)) {
                 long long n_bytes = fmin((nvram_usage - NVRAM_TARGET) * nvram_sz,
                                     (DRAM_TARGET - dram_usage) * dram_sz);
                 n_pages = n_bytes / page_size;

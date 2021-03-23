@@ -50,6 +50,7 @@ uint32 AfterTime;
 bool pmm = (PMM_MIXED == 0 ? true : false);
 bool pmmMixed = !pmm;
 
+memdata_t md;
 
 void print_help(const string prog_name)
 {
@@ -87,6 +88,10 @@ void display_sys_bandwidth(memdata_t *md)
         \r|--                        Read Throughput(MB/s):" << setw(14) << md->sys_dramReads+md->sys_pmmReads <<                              "                --|\n\
         \r|--                       Write Throughput(MB/s):" << setw(14) << md->sys_dramWrites+md->sys_pmmWrites <<                            "                --|\n\
         \r|--                      Memory Throughput(MB/s):" << setw(14) << md->sys_dramReads+md->sys_dramWrites+md->sys_pmmReads+md->sys_pmmWrites << "                --|\n\
+        \r|--                      Total DRAM Read (MEv/s):" << setw(14) << md->total_rDram << "                --|\n\
+        \r|--                     Total DRAM Write (MEv/s):" << setw(14) << md->total_wDram << "                --|\n\
+        \r|--                    Total Optane Read (MEv/s):" << setw(14) << md->total_rOptane << "                --|\n\
+        \r|--                   Total Optane Write (MEv/s):" << setw(14) << md->total_wOptane << "                --|\n\
         \r|---------------------------------------||---------------------------------------|\n";
 }
 
@@ -98,23 +103,37 @@ void write_memdata(memdata_t md) {
     fclose(out_file);
 
     rename("memdata.tmp", PCM_FILE_NAME);
+
+    FILE * txt_file;
+    txt_file = fopen("pcmEvents.tmp", "w");
+    fprintf(txt_file, "R_DRAM: %lu\nW_DRAM: %lu\nR_OPT: %lu\nW_OPT: %lu\n", md.total_rDram, md.total_wDram, md.total_rOptane, md.total_wOptane);
+    fclose(txt_file);
+
+    rename("pcmEvents.tmp", "pcmEvents.txt");
 }
 
 
 memdata_t calculate_bandwidth(const ServerUncoreCounterState uncState1[], const ServerUncoreCounterState uncState2[], const uint64 elapsedTime)
 {
     //uint64 pmmMemoryModeCleanMisses = 0, pmmMemoryModeDirtyMisses = 0;
-    memdata_t md;
 
     md.sys_dramReads = 0.0;
     md.sys_dramWrites = 0.0;
     md.sys_pmmReads = 0.0;
     md.sys_pmmWrites = 0.0;
 
+    md.sys_pmmAppBW = 0.0;
+    md.sys_pmmMemBW = 0.0;
+
     auto toBW = [&elapsedTime](const uint64 nEvents)
     {
         return (float)(nEvents * 64 / 1000000.0 / (elapsedTime / 1000.0));
     };
+    auto toMEv = [&elapsedTime](const uint64 nEvents)
+    {
+        return (uint64)(nEvents / 1000000);
+    };
+
     for(uint32 skt=0; skt < numSockets; ++skt)
     {
         for (uint32 channel = 0; channel < max_imc_channels; ++channel)
@@ -138,10 +157,16 @@ memdata_t calculate_bandwidth(const ServerUncoreCounterState uncState1[], const 
                 continue;
             }
 
+            md.total_rDram += toMEv(reads);
+            md.total_wDram += toMEv(writes);
+
             md.sys_dramReads += toBW(reads);
             md.sys_dramWrites += toBW(writes);
 
             if (pmm) {
+                md.total_rOptane += toMEv(pmmReads);
+                md.total_wOptane += toMEv(pmmWrites);
+
                 md.sys_pmmReads += toBW(pmmReads);
                 md.sys_pmmWrites += toBW(pmmWrites);
             }
@@ -152,8 +177,15 @@ memdata_t calculate_bandwidth(const ServerUncoreCounterState uncState1[], const 
 
         if (pmmMixed) {
             for(uint32 c = 0; c < max_imc_controllers; ++c) {
-                md.sys_pmmReads += toBW(getM2MCounter(c, ServerPCICFGUncore::EventPosition::PMM_READ, uncState1[skt],uncState2[skt]));
-                md.sys_pmmWrites += toBW(getM2MCounter(c, ServerPCICFGUncore::EventPosition::PMM_WRITE, uncState1[skt],uncState2[skt]));;
+                uint64 pmmReads = 0, pmmWrites = 0;
+                pmmReads = getM2MCounter(c, ServerPCICFGUncore::EventPosition::PMM_READ, uncState1[skt],uncState2[skt]);
+                pmmWrites = getM2MCounter(c, ServerPCICFGUncore::EventPosition::PMM_WRITE, uncState1[skt],uncState2[skt]);
+
+                md.total_rOptane += toMEv(pmmReads);
+                md.total_wOptane += toMEv(pmmWrites);
+
+                md.sys_pmmReads += toBW(pmmReads);
+                md.sys_pmmWrites += toBW(pmmWrites);
             }
         }
     }
@@ -259,6 +291,21 @@ int main(int argc, char * argv[])
 
     BeforeTime = m->getTickCount();
 
+    // Init MD
+
+    md.sys_dramReads = 0.0;
+    md.sys_dramWrites = 0.0;
+    md.sys_pmmReads = 0.0;
+    md.sys_pmmWrites = 0.0;
+
+    md.sys_pmmAppBW = 0.0;
+    md.sys_pmmMemBW = 0.0;
+
+    md.total_rDram = 0;
+    md.total_wDram = 0;
+    md.total_rOptane = 0;
+    md.total_wOptane = 0;
+
     while (true)
     {
         MySleep(PCM_DELAY);
@@ -267,7 +314,7 @@ int main(int argc, char * argv[])
         for(uint32 i=0; i<numSockets; ++i)
             AfterState[i] = m->getServerUncoreCounterState(i);
 
-        memdata_t md = calculate_bandwidth(BeforeState,AfterState,AfterTime-BeforeTime);
+        calculate_bandwidth(BeforeState,AfterState,AfterTime-BeforeTime);
         write_memdata(md);
         display_sys_bandwidth(&md);
 
