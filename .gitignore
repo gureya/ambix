@@ -7,6 +7,8 @@ memdata
 # Prerequisites
 *.d
 *.x
+*.data
+*.input
 
 outputs
 pmbench
