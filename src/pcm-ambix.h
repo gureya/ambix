@@ -1,5 +1,5 @@
-#ifndef _PCM_PNP_H
-#define _PCM_PNP_H
+#ifndef _PCM_AMBIX_H
+#define _PCM_AMBIX_H
 
 #define MAX_SOCKETS 2
 #define PCM_FILE_NAME "memdata"

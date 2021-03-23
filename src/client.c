@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "pnp-client.h"
+#include "ambix-client.h"
 
 
 int main() {

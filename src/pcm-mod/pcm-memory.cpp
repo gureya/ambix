@@ -31,7 +31,7 @@
 #include <assert.h>
 #include "cpucounters.h"
 #include "utils.h"
-#include "../pcm-pnp.h"
+#include "../pcm-ambix.h"
 
 
 using namespace std;

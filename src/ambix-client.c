@@ -1,4 +1,4 @@
-#include "pnp.h"
+#include "ambix.h"
 
 #include <numa.h>
 #include <numaif.h>

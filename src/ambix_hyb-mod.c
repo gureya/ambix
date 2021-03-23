@@ -5,7 +5,7 @@
  * @version 0.3
  * @brief  Page walker for finding page table entries' R/M bits. Intended for the 5.6.3 Linux kernel.
  * Adapted from the code provided by Reza Karimi <r68karimi@gmail.com>
- * @see https://github.com/miguelmarques1904/pnp for a full description of the module.
+ * @see https://github.com/miguelmarques1904/ambix for a full description of the module.
  */
 
 #pragma GCC diagnostic ignored "-Wdeclaration-after-statement"
@@ -33,7 +33,7 @@
 #include <linux/mmzone.h> // Contains conversion between pfn and node id (NUMA node)
 
 #include <linux/string.h>
-#include "pnp.h"
+#include "ambix.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");

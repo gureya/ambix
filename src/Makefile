@@ -2,7 +2,7 @@ CONFIG_MODULE_SIG=n
 CC = gcc
 CFLAGS = -Wall -lnuma -pthread -lm
 
-MODULE_FILENAME=pnp_hyb-mod
+MODULE_FILENAME=ambix_hyb-mod
 obj-m +=  $(MODULE_FILENAME).o
 KO_FILE=$(MODULE_FILENAME).ko
 
@@ -10,7 +10,7 @@ export KROOT=/lib/modules/$(shell uname -r)/build
 
 all: ctl module bind unbind
 
-module: pnp_hyb-mod.c pnp.h
+module: ambix_hyb-mod.c ambix.h
 	@$(MAKE) -C $(KROOT) M=$(PWD) modules -j 12
 
 module_install:
@@ -30,15 +30,15 @@ remove:
 force-remove:
 	sudo rmmod -f $(MODULE_FILENAME)
 
-ctl: pnp_hyb-ctl.c pnp.h
-	${CC} ${CFLAGS} -o pnp_hyb-ctl.o pnp_hyb-ctl.c
+ctl: ambix_hyb-ctl.c ambix.h
+	${CC} ${CFLAGS} -o ambix_hyb-ctl.o ambix_hyb-ctl.c
 
-client: client.c client_2.c pnp-client.c pnp.h pnp-client.h
-	${CC} ${CFLAGS} -o client.o pnp-client.c client.c
-	${CC} ${CFLAGS} -o client_2.o pnp-client.c client_2.c
+client: client.c client_2.c ambix-client.c ambix.h ambix-client.h
+	${CC} ${CFLAGS} -o client.o ambix-client.c client.c
+	${CC} ${CFLAGS} -o client_2.o ambix-client.c client_2.c
 
-bind: bind.c pnp-client.c pnp-client.h pnp.h
-	${CC} ${CFLAGS} -o bind.o pnp-client.c bind.c
+bind: bind.c ambix-client.c ambix-client.h ambix.h
+	${CC} ${CFLAGS} -o bind.o ambix-client.c bind.c
 
-unbind: unbind.c pnp-client.c pnp-client.h pnp.h
-	${CC} ${CFLAGS} -o unbind.o pnp-client.c unbind.c
+unbind: unbind.c ambix-client.c ambix-client.h ambix.h
+	${CC} ${CFLAGS} -o unbind.o ambix-client.c unbind.c

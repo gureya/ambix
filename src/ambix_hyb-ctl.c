@@ -1,5 +1,5 @@
-#include "pnp.h"
-#include "pcm-pnp.h"
+#include "ambix.h"
+#include "pcm-ambix.h"
 
 #include <sys/socket.h>
 #include <sys/select.h>

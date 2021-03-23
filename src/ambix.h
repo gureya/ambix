@@ -1,5 +1,5 @@
-#ifndef _PNP_H
-#define _PNP_H
+#ifndef _AMBIX_H
+#define _AMBIX_H
 
 
 // Intervals and limits:
