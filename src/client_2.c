@@ -5,7 +5,8 @@
 
 int main() {
     int array_size = 180000000;
-    if(!bind_uds()) {
+    int pid = getpid();
+    if(!bind_uds(pid)) {
         return 1;
     }
     printf("BIND OK\n");
@@ -44,12 +45,18 @@ int main() {
             printf("Exiting.\n");
             break;
         }
+        else if(c == 'r') {
+            int tmp;
+            for(int i=0; i<array_size; i++) {
+                tmp = a[i];
+            }
+        }
     }
 
-    if(!unbind_uds()) {
+    if(!unbind_uds(pid)) {
         return 1;
     }
-    
+
     printf("UNBIND OK\n");
     return 0;
 }

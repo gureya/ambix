@@ -2,9 +2,21 @@
 .history
 *.swp
 socket
+memdata
 .vscode
 # Prerequisites
 *.d
+*.x
+*.data
+*.input
+numamma
+numammaOUT
+
+outputs
+pmbench
+pmbench-pnp
+tests
+*.sh
 
 blackscholes
 coremark
