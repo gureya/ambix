@@ -33,10 +33,10 @@
 #define NVRAM_CLEAR 4
 #define NVRAM_WRITE_MODE 5
 #define MAX_N_FIND MAX_N_PER_PACKET * MAX_PACKETS - 1 // Amount of pages that fit in exactly MAX_PACKETS netlink packets making space for retval struct (end struct)
-#define MAX_N_SWITCH (MAX_N_FIND - 1) / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for begin and end struct
+#define MAX_N_SWITCH MAX_N_FIND / 2 // Amount of switches that fit in exactly MAX_PACKETS netlink packets making space for separator and end struct
 
 
-// Node definition: DRAM nodes' (memory mode) ids must always be a lower value than NVRAM nodes' ids due to the memory policy set in client-placement.c
+// Node definition
 static const int DRAM_NODES[] = {0};
 static const int NVRAM_NODES[] = {2};
 

@@ -224,15 +224,15 @@ int do_migration(int mode, int n_found) {
     int *status = malloc(sizeof(int) * n_found);
 
     const int *node_list;
-    int size;
+    int n_nodes;
 
     if (mode == DRAM_MODE) {
         node_list = NVRAM_NODES;
-        size = n_nvram_nodes;
+        n_nodes = n_nvram_nodes;
     }
     else {
         node_list = DRAM_NODES;
-        size = n_dram_nodes;
+        n_nodes = n_dram_nodes;
     }
 
     for (int i=0; i< n_found; i++) {
@@ -240,12 +240,12 @@ int do_migration(int mode, int n_found) {
     }
 
     int n_processed = 0;
-    for (int i=0; (i < size) && (n_processed < n_found); i++) {
+    for (int i=0; (i < n_nodes) && (n_processed < n_found); i++) {
         int curr_node = node_list[i];
 
         int n_avail_pages = free_space_pages(curr_node);
 
-        long j=0;
+        int j=0;
         for (; (j < n_avail_pages) && (n_processed+j < n_found); j++) {
             addr[n_processed+j] = (void *) candidates[n_processed+j].addr;
             dest_nodes[n_processed+j] = curr_node;
@@ -271,16 +271,8 @@ int do_migration(int mode, int n_found) {
                     printf("Error migrating addr: %ld, pid: %d\n", (unsigned long) *(addr_displacement + j), curr_pid);
                     e++;
                 }
-                //else if (mode == DRAM_MODE) {
-                //    _mm_clflush(addr_displacement + j);
-                //}
             }
         }
-        //else if (mode == DRAM_MODE) {
-         //   for (int j=0; j < i; j++) {
-          //      _mm_clflush(addr_displacement + j);
-           // }
-        //}
     }
 
     free(addr);
