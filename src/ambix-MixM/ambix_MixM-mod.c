@@ -82,16 +82,20 @@ static int find_target_process(pid_t pid) {  // to find the task struct by proce
     }
     int i;
     for (i=0; i < n_pids; i++) {
-        if (task_items[i]->pid == pid) {
+        if (task_items[i] == NULL) {
+            update_pid_list(i);
+            i--;
+        }
+        else if (task_items[i]->pid == pid) {
             pr_info("PLACEMENT: Already managing given PID.\n");
             return 0;
         }
     }
-    for_each_process(task_items[n_pids]) {
-        if (task_items[n_pids]->pid == pid) {
-            n_pids++;
-            return 1;
-        }
+
+    task_struct *task = pid_task(find_vpid(pid), PIDTYPE_PID);
+    if (task != NULL) {
+        task_items[i] = task;
+        return 1;
     }
 
     return 0;
@@ -133,30 +137,16 @@ static int update_pid_list(int i) {
 
 static int refresh_pids(void) {
     int i;
-    printk(KERN_INFO "OLD LIST:");
-    for(i=0; i<n_pids; i++) {
-        printk(KERN_INFO "i:%d, pid:%d", i, task_items[i]->pid);
-    }
 
     for (i=0; i < n_pids; i++) {
-        int pid = task_items[i]->pid;
-        int found = 0;
-
-        for_each_process(task_items[i]) {
-            if (task_items[i]->pid == pid) {
-                found = 1;
-                break;
-            }
-        }
-
-        if (!found) {
+        if(task_items[i] == NULL) {
             update_pid_list(i);
             i--;
         }
 
     }
 
-    printk(KERN_INFO "NEW LIST:");
+    printk(KERN_INFO "LIST AFTER REFRESH:");
     for(i=0; i<n_pids; i++) {
         printk(KERN_INFO "i:%d, pid:%d", i, task_items[i]->pid);
     }
@@ -736,7 +726,7 @@ static int unbind_pid(pid_t pid) {
     // Find which task to remove
     int i;
     for (i = 0; i < n_pids; i++) {
-        if (task_items[i]->pid == pid) {
+        if ((task_items[i] != NULL) && (task_items[i]->pid == pid)) {
             break;
         }
     }
