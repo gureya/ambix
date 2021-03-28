@@ -4,7 +4,7 @@
 
 
 int main() {
-    int array_size = 180000000;
+    int array_size = 500000000;
     int pid = getpid();
     if(!bind_uds(pid)) {
         return 1;

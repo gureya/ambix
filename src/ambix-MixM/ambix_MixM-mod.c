@@ -824,7 +824,15 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     process_req(in_req);
 
-    int required_packets = (n_found / MAX_N_PER_PACKET) + ((n_found % MAX_N_PER_PACKET) != 0);
+
+    // Calculate size of the last netlink packet
+    int last_packet_remainder = n_found % MAX_N_PER_PACKET;
+    int last_packet_entries = last_packet_remainder;
+    if (last_packet_remainder == 0) {
+        last_packet_entries = MAX_N_PER_PACKET;
+    }
+
+    int required_packets = (n_found / MAX_N_PER_PACKET) + (last_packet_remainder != 0);
     skb_out = nlmsg_new(NLMSG_LENGTH(MAX_PAYLOAD) * required_packets, GFP_KERNEL);
     if (!skb_out) {
         pr_err("Failed to allocate new skb.\n");
@@ -838,9 +846,10 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
         memset(NLMSG_DATA(nlmh_array[i]), 0, MAX_PAYLOAD);
         memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, MAX_PAYLOAD);
     }
-    int rem_size = (n_found % MAX_N_PER_PACKET) * sizeof(addr_info_t);
+    int rem_size = last_packet_entries * sizeof(addr_info_t);
 
     nlmh_array[i] = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, rem_size, 0);
+    memset(NLMSG_DATA(nlmh_array[i]), 0, rem_size);
     memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, rem_size);
 
     NETLINK_CB(skb_out).dst_group = 0; // unicast
