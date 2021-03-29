@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "ambix-client.h"
 
+#include <unistd.h>
+
 
 int main() {
     int pid = getpid();

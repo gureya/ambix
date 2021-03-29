@@ -187,7 +187,7 @@ static int pte_callback_mem(pte_t *ptep, unsigned long addr, unsigned long next,
         return 0;
     }
 
-    if (pte_dirty(*ptep) && (n_backup < (n_to_find - n_found))) {
+    if (!pte_dirty(*ptep) && (n_backup < (n_to_find - n_found))) {
             // Add to backup list
             backup_addrs[n_backup].addr = addr;
             backup_addrs[n_backup++].pid_retval = curr_pid;
@@ -339,7 +339,7 @@ static int pte_callback_nvram_intensive(pte_t *ptep, unsigned long addr, unsigne
     }
 
     if(pte_young(*ptep)) {
-        if (!pte_dirty(*ptep)) {
+        if (pte_dirty(*ptep)) {
             // Send to DRAM (priority)
             found_addrs[n_found].addr = addr;
             found_addrs[n_found++].pid_retval = curr_pid;
@@ -375,7 +375,7 @@ static int pte_callback_nvram_switch(pte_t *ptep, unsigned long addr, unsigned l
     }
 
     if(pte_young(*ptep)) {
-        if (!pte_dirty(*ptep)) {
+        if (pte_dirty(*ptep)) {
             // Send to DRAM (priority)
             found_addrs[n_found].addr = addr;
             found_addrs[n_found++].pid_retval = curr_pid;
@@ -457,9 +457,13 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
     mm = task_items[last_pid]->mm;
     curr_pid = task_items[last_pid]->pid;
 
+    pr_info("ACK LOCK 1\n");
     down_read(&mm->mmap_lock);
+    pr_info("PLACEMENT: START pagewalk 1\n");
     walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
+    pr_info("PLACEMENT: END pagewalk 1\n");
     up_read(&mm->mmap_lock);
+    pr_info("ACK UNLOCK 1\n");
 
     if (n_found >= n_to_find) {
         return last_pid;
@@ -470,9 +474,13 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
         mm = task_items[i]->mm;
         curr_pid = task_items[i]->pid;
 
+        pr_info("ACK LOCK 2\n");
         down_read(&mm->mmap_lock);
+        pr_info("PLACEMENT: START pagewalk 2\n");
         walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+        pr_info("PLACEMENT: END pagewalk 2\n");
         up_read(&mm->mmap_lock);
+        pr_info("ACK UNLOCK 2\n");
 
         if (n_found >= n_to_find) {
             return i;
@@ -483,22 +491,28 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
         mm = task_items[i]->mm;
         curr_pid = task_items[i]->pid;
 
+        pr_info("ACK LOCK 3\n");
         down_read(&mm->mmap_lock);
+        pr_info("PLACEMENT: START pagewalk 3\n");
         walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+        pr_info("PLACEMENT: END pagewalk 3\n");
         up_read(&mm->mmap_lock);
+        pr_info("ACK UNLOCK 3\n");
         if (n_found >= n_to_find) {
             return i;
         }
     }
-
     // finish cycle at last_pid->last_addr
     mm = task_items[last_pid]->mm;
     curr_pid = task_items[last_pid]->pid;
 
+    pr_info("ACK LOCK 4\n");
     down_read(&mm->mmap_lock);
-    walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
+    pr_info("PLACEMENT: START pagewalk 4\n");
+    walk_page_range(mm, 0, last_addr, &mem_walk_ops, NULL);
+    pr_info("PLACEMENT: END pagewalk 4\n");
     up_read(&mm->mmap_lock);
-
+    pr_info("ACK UNLOCK 4\n");
     return last_pid;
 }
 

@@ -3,7 +3,7 @@
 # written by Roman Dementiev and Jim Harris
 #
 
-EXE = pcm-memory.x
+EXE = pcm-memory.x pcm-power.x
 
 UNAME:=$(shell uname)
 

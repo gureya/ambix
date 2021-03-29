@@ -82,16 +82,20 @@ static int find_target_process(pid_t pid) {  // to find the task struct by proce
     }
     int i;
     for (i=0; i < n_pids; i++) {
-        if (task_items[i]->pid == pid) {
+        if ((task_items[i] != NULL) && (task_items[i]->pid == pid)) {
             pr_info("PLACEMENT: Already managing given PID.\n");
             return 0;
         }
     }
-    for_each_process(task_items[n_pids]) {
-        if (task_items[n_pids]->pid == pid) {
-            n_pids++;
-            return 1;
-        }
+
+    struct pid *pid_s = find_get_pid(pid);
+    if (pid_s == NULL) {
+        return 0;
+    }
+    struct task_struct *t = get_pid_task(pid_s, PIDTYPE_PID);
+    if (t != NULL) {
+        task_items[n_pids++] = t;
+        return 1;
     }
 
     return 0;
@@ -133,32 +137,18 @@ static int update_pid_list(int i) {
 
 static int refresh_pids(void) {
     int i;
-    printk(KERN_INFO "OLD LIST:");
-    for(i=0; i<n_pids; i++) {
-        printk(KERN_INFO "i:%d, pid:%d", i, task_items[i]->pid);
-    }
 
     for (i=0; i < n_pids; i++) {
-        int pid = task_items[i]->pid;
-        int found = 0;
-
-        for_each_process(task_items[i]) {
-            if (task_items[i]->pid == pid) {
-                found = 1;
-                break;
-            }
-        }
-
-        if (!found) {
+        if((task_items[i] == NULL) || (find_get_pid(task_items[i]->pid) == NULL)) {
             update_pid_list(i);
             i--;
         }
 
     }
 
-    printk(KERN_INFO "NEW LIST:");
+    printk(KERN_INFO "LIST AFTER REFRESH:");
     for(i=0; i<n_pids; i++) {
-        printk(KERN_INFO "i:%d, pid:%d", i, task_items[i]->pid);
+        printk(KERN_INFO "i:%d, pid:%d\n", i, task_items[i]->pid);
     }
 
     return 0;
@@ -463,13 +453,14 @@ PAGE WALKERS
 static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned long last_addr) {
     struct mm_struct *mm;
     int i;
-    //pr_info("PLACEMENT: lastaddr - %p\n", (void *) last_addr);
     // begin at last_pid->last_addr
     mm = task_items[last_pid]->mm;
-    //spin_lock(&mm->page_table_lock);
     curr_pid = task_items[last_pid]->pid;
+
+    down_read(&mm->mmap_lock);
     walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
-    //spin_unlock(&mm->page_table_lock);
+    up_read(&mm->mmap_lock);
+
     if (n_found >= n_to_find) {
         return last_pid;
     }
@@ -477,21 +468,24 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
     for (i=last_pid+1; i<n_pids; i++) {
 
         mm = task_items[i]->mm;
-        //spin_lock(&mm->page_table_lock);
         curr_pid = task_items[i]->pid;
+
+        down_read(&mm->mmap_lock);
         walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-        //spin_unlock(&mm->page_table_lock);
+        up_read(&mm->mmap_lock);
+
         if (n_found >= n_to_find) {
             return i;
         }
     }
 
-    for (i = 0; i < last_pid-1; i++) {
+    for (i = 0; i < last_pid; i++) {
         mm = task_items[i]->mm;
-        //spin_lock(&mm->page_table_lock);
         curr_pid = task_items[i]->pid;
+
+        down_read(&mm->mmap_lock);
         walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-        //spin_unlock(&mm->page_table_lock);
+        up_read(&mm->mmap_lock);
         if (n_found >= n_to_find) {
             return i;
         }
@@ -499,10 +493,11 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
 
     // finish cycle at last_pid->last_addr
     mm = task_items[last_pid]->mm;
-    //spin_lock(&mm->page_table_lock);
     curr_pid = task_items[last_pid]->pid;
+
+    down_read(&mm->mmap_lock);
     walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
-    //spin_unlock(&mm->page_table_lock);
+    up_read(&mm->mmap_lock);
 
     return last_pid;
 }
@@ -736,7 +731,7 @@ static int unbind_pid(pid_t pid) {
     // Find which task to remove
     int i;
     for (i = 0; i < n_pids; i++) {
-        if (task_items[i]->pid == pid) {
+        if ((task_items[i] != NULL) && (task_items[i]->pid == pid)) {
             break;
         }
     }
@@ -874,6 +869,7 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
             pr_info("PLACEMENT: Error sending response to ctl.\n");
     }
 }
+
 
 
 /*
