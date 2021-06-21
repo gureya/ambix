@@ -33,7 +33,7 @@ It also leverages a modified version of PCM (https://github.com/opcm/pcm).
   7. Go to ```src/pcm-mod/``` and compile its contents with ```make```
   8. Move ```pcm-memory.x``` to the ```src/``` directory.
 
-## Using Ambix:
+# Using Ambix:
 
 1. Start Ambix by running the following commands:
   ```
@@ -48,7 +48,7 @@ It also leverages a modified version of PCM (https://github.com/opcm/pcm).
 
   A. Preferred Method (C/C++/Fortran):
   
-  1. Add a ```bind_uds([pid])``` and ```unbind_uds([pid])``` calls to the start and end of a target application's source code. If application is Fortran add          ```(un)bind_uds_ft()``` instead. Alternatively the ```(un)bind_uds_ft()``` call also work for C/C++ applications without specifying a PID.
+  1. Add a ```bind_uds([pid])``` and ```unbind_uds([pid])``` calls to the start and end of a target application's source code. If application is Fortran add          ```[un|]bind_uds_ft()``` instead. Alternatively the ```[un|]bind_uds_ft()``` call also work for C/C++ applications without specifying a PID.
 
   2. Compile target binary with ambix_client.c (e.g. ```gcc [...] -c ambix_client.c```).
 
