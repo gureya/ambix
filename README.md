@@ -32,7 +32,10 @@ It also leverages a modified version of PCM (https://github.com/opcm/pcm).
   
   7. Go to ```src/pcm-mod/``` and compile its contents with ```make```
   8. Move ```pcm-memory.x``` to the ```src/``` directory.
-  9. Start Ambix, by running the following commands:
+
+## Using Ambix:
+
+1. Start Ambix by running the following commands:
   ```
   
     sudo make insert
@@ -40,8 +43,6 @@ It also leverages a modified version of PCM (https://github.com/opcm/pcm).
     ./ambix-hyb-ctl.o
 
   ```
-
-## Using Ambix:
 
 In order to bind processes to Ambix, multiple options are provided:
 
