@@ -25,7 +25,7 @@ It also leverages a modified version of PCM (https://github.com/opcm/pcm).
   4. Disable THPs
 
 ## Ambix Configuration:
-  1. Clone the latest version from the master branch.
+  1. Download and unzip latest Ambix release.
   2. Go to ```ambix/src/``` and edit ```ambix.h```, setting the ```DRAM_NODES[]``` and ```NVRAM_NODES[]``` constants to the respective DRAM and NVRAM nodes that should be monitored by Ambix.
   3. (optional) Edit the ```ambix_hyb-mod.c``` file, chaging the "5.8.5-patched" in the ```MODULE_INFO(vermagic, "5.8.5-patched SMP mod_unload modversions ")``` line to the name of the current kernel version. If not done, a version mismatch warning will be printed in the kernel log.
   4. Compile the ```src/``` directory contents with ```make```
