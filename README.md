@@ -44,12 +44,16 @@ It also leverages a modified version of PCM (https://github.com/opcm/pcm).
 
   ```
 
-In order to bind processes to Ambix, multiple options are provided:
+ In order to bind processes to Ambix, multiple options are provided:
 
-  A. Preferred Method (C/C++/Fortran)
-  1. Add a ```bind_uds([pid])``` and ```unbind_uds([pid])``` calls to the start and end of a target application's source code. If application is Fortran add ```(un)bind_uds_ft()``` instead. Alternatively the ```(un)bind_uds_ft()``` call also work for C/C++ applications without specifying a PID.
+  A. Preferred Method (C/C++/Fortran):
+  
+  1. Add a ```bind_uds([pid])``` and ```unbind_uds([pid])``` calls to the start and end of a target application's source code. If application is Fortran add          ```(un)bind_uds_ft()``` instead. Alternatively the ```(un)bind_uds_ft()``` call also work for C/C++ applications without specifying a PID.
+
   2. Compile target binary with ambix_client.c (e.g. ```gcc [...] -c ambix_client.c```).
 
-  B1. Alternative Method 1 (any binary): Use the compiled bind.o and unbind.o (e.g. ```[binary] | PID=$! & ./bind.o $PID; wait; ./unbind.o $PID```).
-  
-  B2. Alternative Method 2 (any binary): In the ambix_hyb-ctl.o CLI use the bind and unbind commands followed by the target binary's PID.
+  B. Alternative Method 1 (any binary):
+  1. Use the compiled bind.o and unbind.o (e.g. ```[binary] | PID=$! & ./bind.o $PID; wait; ./unbind.o $PID```).
+    
+  C. Alternative Method 2 (any binary):
+  1. In the ambix_hyb-ctl.o CLI use the bind and unbind commands followed by the target binary's PID.
