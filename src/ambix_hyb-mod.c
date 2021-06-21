@@ -82,16 +82,20 @@ static int find_target_process(pid_t pid) {  // to find the task struct by proce
     }
     int i;
     for (i=0; i < n_pids; i++) {
-        if (task_items[i]->pid == pid) {
+        if ((task_items[i] != NULL) && (task_items[i]->pid == pid)) {
             pr_info("PLACEMENT: Already managing given PID.\n");
             return 0;
         }
     }
-    for_each_process(task_items[n_pids]) {
-        if (task_items[n_pids]->pid == pid) {
-            n_pids++;
-            return 1;
-        }
+
+    struct pid *pid_s = find_get_pid(pid);
+    if (pid_s == NULL) {
+        return 0;
+    }
+    struct task_struct *t = get_pid_task(pid_s, PIDTYPE_PID);
+    if (t != NULL) {
+        task_items[n_pids++] = t;
+        return 1;
     }
 
     return 0;
@@ -133,32 +137,18 @@ static int update_pid_list(int i) {
 
 static int refresh_pids(void) {
     int i;
-    printk(KERN_INFO "OLD LIST:");
-    for(i=0; i<n_pids; i++) {
-        printk(KERN_INFO "i:%d, pid:%d", i, task_items[i]->pid);
-    }
 
     for (i=0; i < n_pids; i++) {
-        int pid = task_items[i]->pid;
-        int found = 0;
-
-        for_each_process(task_items[i]) {
-            if (task_items[i]->pid == pid) {
-                found = 1;
-                break;
-            }
-        }
-
-        if (!found) {
+        if((task_items[i] == NULL) || (find_get_pid(task_items[i]->pid) == NULL)) {
             update_pid_list(i);
             i--;
         }
 
     }
 
-    printk(KERN_INFO "NEW LIST:");
+    printk(KERN_INFO "LIST AFTER REFRESH:");
     for(i=0; i<n_pids; i++) {
-        printk(KERN_INFO "i:%d, pid:%d", i, task_items[i]->pid);
+        printk(KERN_INFO "i:%d, pid:%d\n", i, task_items[i]->pid);
     }
 
     return 0;
@@ -198,6 +188,9 @@ static int pte_callback_mem(pte_t *ptep, unsigned long addr, unsigned long next,
     }
 
     if (!pte_dirty(*ptep) && (n_backup < (n_to_find - n_found))) {
+            if(pte_dirty(*ptep)) {
+                printk(KERN_INFO "F\n");
+            }
             // Add to backup list
             backup_addrs[n_backup].addr = addr;
             backup_addrs[n_backup++].pid_retval = curr_pid;
@@ -363,11 +356,6 @@ static int pte_callback_nvram_intensive(pte_t *ptep, unsigned long addr, unsigne
         }
     }
 
-    pte_t old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
-    *ptep = pte_mkold(old_pte); // unset modified bit
-    *ptep = pte_mkclean(old_pte); // unset dirty bit
-    ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, *ptep);
-
     return 0;
 }
 static int pte_callback_nvram_switch(pte_t *ptep, unsigned long addr, unsigned long next,
@@ -397,11 +385,6 @@ static int pte_callback_nvram_switch(pte_t *ptep, unsigned long addr, unsigned l
             switch_backup_addrs[n_switch_backup++].pid_retval = curr_pid;
         }
     }
-
-    pte_t old_pte = ptep_modify_prot_start(walk->vma, addr, ptep);
-    *ptep = pte_mkold(old_pte); // unset modified bit
-    *ptep = pte_mkclean(old_pte); // unset dirty bit
-    ptep_modify_prot_commit(walk->vma, addr, ptep, old_pte, *ptep);
 
     return 0;
 }
@@ -463,13 +446,14 @@ PAGE WALKERS
 static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned long last_addr) {
     struct mm_struct *mm;
     int i;
-    //pr_info("PLACEMENT: lastaddr - %p\n", (void *) last_addr);
     // begin at last_pid->last_addr
     mm = task_items[last_pid]->mm;
-    //spin_lock(&mm->page_table_lock);
     curr_pid = task_items[last_pid]->pid;
+
+    down_read(&mm->mmap_lock);
     walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
-    //spin_unlock(&mm->page_table_lock);
+    up_read(&mm->mmap_lock);
+
     if (n_found >= n_to_find) {
         return last_pid;
     }
@@ -477,21 +461,24 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
     for (i=last_pid+1; i<n_pids; i++) {
 
         mm = task_items[i]->mm;
-        //spin_lock(&mm->page_table_lock);
         curr_pid = task_items[i]->pid;
+
+        down_read(&mm->mmap_lock);
         walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-        //spin_unlock(&mm->page_table_lock);
+        up_read(&mm->mmap_lock);
+
         if (n_found >= n_to_find) {
             return i;
         }
     }
 
-    for (i = 0; i < last_pid-1; i++) {
+    for (i = 0; i < last_pid; i++) {
         mm = task_items[i]->mm;
-        //spin_lock(&mm->page_table_lock);
         curr_pid = task_items[i]->pid;
+
+        down_read(&mm->mmap_lock);
         walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-        //spin_unlock(&mm->page_table_lock);
+        up_read(&mm->mmap_lock);
         if (n_found >= n_to_find) {
             return i;
         }
@@ -499,10 +486,11 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
 
     // finish cycle at last_pid->last_addr
     mm = task_items[last_pid]->mm;
-    //spin_lock(&mm->page_table_lock);
     curr_pid = task_items[last_pid]->pid;
+
+    down_read(&mm->mmap_lock);
     walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
-    //spin_unlock(&mm->page_table_lock);
+    up_read(&mm->mmap_lock);
 
     return last_pid;
 }
@@ -736,7 +724,7 @@ static int unbind_pid(pid_t pid) {
     // Find which task to remove
     int i;
     for (i = 0; i < n_pids; i++) {
-        if (task_items[i]->pid == pid) {
+        if ((task_items[i] != NULL) && (task_items[i]->pid == pid)) {
             break;
         }
     }
@@ -834,7 +822,15 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
 
     process_req(in_req);
 
-    int required_packets = (n_found / MAX_N_PER_PACKET) + ((n_found % MAX_N_PER_PACKET) != 0);
+
+    // Calculate size of the last netlink packet
+    int last_packet_remainder = n_found % MAX_N_PER_PACKET;
+    int last_packet_entries = last_packet_remainder;
+    if (last_packet_remainder == 0) {
+        last_packet_entries = MAX_N_PER_PACKET;
+    }
+
+    int required_packets = (n_found / MAX_N_PER_PACKET) + (last_packet_remainder != 0);
     skb_out = nlmsg_new(NLMSG_LENGTH(MAX_PAYLOAD) * required_packets, GFP_KERNEL);
     if (!skb_out) {
         pr_err("Failed to allocate new skb.\n");
@@ -848,9 +844,10 @@ static void placement_nl_process_msg(struct sk_buff *skb) {
         memset(NLMSG_DATA(nlmh_array[i]), 0, MAX_PAYLOAD);
         memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, MAX_PAYLOAD);
     }
-    int rem_size = (n_found % MAX_N_PER_PACKET) * sizeof(addr_info_t);
+    int rem_size = last_packet_entries * sizeof(addr_info_t);
 
     nlmh_array[i] = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, rem_size, 0);
+    memset(NLMSG_DATA(nlmh_array[i]), 0, rem_size);
     memcpy(NLMSG_DATA(nlmh_array[i]), found_addrs + i*MAX_N_PER_PACKET, rem_size);
 
     NETLINK_CB(skb_out).dst_group = 0; // unicast
