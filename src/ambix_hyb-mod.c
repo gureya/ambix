@@ -188,9 +188,6 @@ static int pte_callback_mem(pte_t *ptep, unsigned long addr, unsigned long next,
     }
 
     if (!pte_dirty(*ptep) && (n_backup < (n_to_find - n_found))) {
-            if(pte_dirty(*ptep)) {
-                printk(KERN_INFO "F\n");
-            }
             // Add to backup list
             backup_addrs[n_backup].addr = addr;
             backup_addrs[n_backup++].pid_retval = curr_pid;
