@@ -76,7 +76,7 @@ HELPER FUNCTIONS
 
 
 static int find_target_process(pid_t pid) {  // to find the task struct by process_name or pid
-    if ((MAX_PIDS > 0) && (n_pids > MAX_PIDS)) {
+    if ((MAX_PIDS > 0) && (n_pids >= MAX_PIDS)) {
         pr_info("PLACEMENT: Managed PIDs at capacity.\n");
         return 0;
     }
