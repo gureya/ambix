@@ -88,10 +88,10 @@ void display_sys_bandwidth(memdata_t *md)
         \r|--                        Read Throughput(MB/s):" << setw(14) << md->sys_dramReads+md->sys_pmmReads <<                              "                --|\n\
         \r|--                       Write Throughput(MB/s):" << setw(14) << md->sys_dramWrites+md->sys_pmmWrites <<                            "                --|\n\
         \r|--                      Memory Throughput(MB/s):" << setw(14) << md->sys_dramReads+md->sys_dramWrites+md->sys_pmmReads+md->sys_pmmWrites << "                --|\n\
-        \r|--                      Total DRAM Read (MEv/s):" << setw(14) << md->total_rDram << "                --|\n\
-        \r|--                     Total DRAM Write (MEv/s):" << setw(14) << md->total_wDram << "                --|\n\
-        \r|--                    Total Optane Read (MEv/s):" << setw(14) << md->total_rOptane << "                --|\n\
-        \r|--                   Total Optane Write (MEv/s):" << setw(14) << md->total_wOptane << "                --|\n\
+        \r|--                      Total DRAM Read (MEv):" << setw(14) << md->total_rDram << "                --|\n\
+        \r|--                     Total DRAM Write (MEv):" << setw(14) << md->total_wDram << "                --|\n\
+        \r|--                    Total Optane Read (MEv):" << setw(14) << md->total_rOptane << "                --|\n\
+        \r|--                   Total Optane Write (MEv):" << setw(14) << md->total_wOptane << "                --|\n\
         \r|---------------------------------------||---------------------------------------|\n";
 }
 

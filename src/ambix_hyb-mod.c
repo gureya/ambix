@@ -76,7 +76,7 @@ HELPER FUNCTIONS
 
 
 static int find_target_process(pid_t pid) {  // to find the task struct by process_name or pid
-    if (n_pids >= MAX_PIDS) {
+    if ((MAX_PIDS > 0) && (n_pids >= MAX_PIDS)) {
         pr_info("PLACEMENT: Managed PIDs at capacity.\n");
         return 0;
     }
@@ -447,9 +447,11 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
     mm = task_items[last_pid]->mm;
     curr_pid = task_items[last_pid]->pid;
 
-    down_read(&mm->mmap_lock);
-    walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
-    up_read(&mm->mmap_lock);
+    if(mm != NULL) {
+        mmap_read_lock(mm);
+        walk_page_range(mm, last_addr, MAX_ADDRESS, &mem_walk_ops, NULL);
+        mmap_read_unlock(mm);
+    }
 
     if (n_found >= n_to_find) {
         return last_pid;
@@ -460,9 +462,11 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
         mm = task_items[i]->mm;
         curr_pid = task_items[i]->pid;
 
-        down_read(&mm->mmap_lock);
-        walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-        up_read(&mm->mmap_lock);
+        if(mm != NULL) {
+            mmap_read_lock(mm);
+            walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+            mmap_read_unlock(mm);
+        }
 
         if (n_found >= n_to_find) {
             return i;
@@ -473,9 +477,11 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
         mm = task_items[i]->mm;
         curr_pid = task_items[i]->pid;
 
-        down_read(&mm->mmap_lock);
-        walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
-        up_read(&mm->mmap_lock);
+        if(mm != NULL) {
+            mmap_read_lock(mm);
+            walk_page_range(mm, 0, MAX_ADDRESS, &mem_walk_ops, NULL);
+            mmap_read_unlock(mm);
+        }
         if (n_found >= n_to_find) {
             return i;
         }
@@ -485,9 +491,11 @@ static int do_page_walk(struct mm_walk_ops mem_walk_ops, int last_pid, unsigned 
     mm = task_items[last_pid]->mm;
     curr_pid = task_items[last_pid]->pid;
 
-    down_read(&mm->mmap_lock);
-    walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
-    up_read(&mm->mmap_lock);
+    if(mm != NULL) {
+        mmap_read_lock(mm);
+        walk_page_range(mm, 0, last_addr+1, &mem_walk_ops, NULL);
+        mmap_read_unlock(mm);
+    }
 
     return last_pid;
 }
