@@ -14,7 +14,7 @@
 #define NVRAM_BW_MAX 20000
 
 // PID info
-#define MAX_PIDS 0 // set to non-zero positive value to limit number of PIDs bound to Ambix
+#define MAX_PIDS 500 // sets the number of PIDs that can be bound to Ambix at any given time
 #define MAX_PID_N 2147483647 // set to INT_MAX. true max pid number is shown in /proc/sys/kernel/pid_max
 
 // Find-related constants:
