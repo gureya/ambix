@@ -38,7 +38,7 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Miguel Marques");
 MODULE_DESCRIPTION("Bandwidth-aware page replacement");
-MODULE_VERSION("0.3");
+MODULE_VERSION("1.11");
 MODULE_INFO(vermagic, "5.8.5-patched SMP mod_unload modversions ");
 
 struct sock *nl_sock;
