@@ -539,6 +539,10 @@ int do_migration(int mode, int n_found) {
     int *dest_nodes_displacement = dest_nodes + n_migrated;
 
     //// start of gureya's code ///
+    //measure the time taken by move_pages system call by this thread!
+    struct timeval tstart, tend;
+    unsigned long exec_time;
+
     size_t j;
     struct thread_data *pdata;
     int start, end;
@@ -612,6 +616,10 @@ int do_switch(int n_found) {
   int *dest_nodes_nvram = malloc(sizeof(int) * n_found);
   int *status = malloc(sizeof(int) * n_found);
 
+  //measure the time taken by move_pages system call by this thread!
+  struct timeval tstart, tend;
+  unsigned long exec_time;
+
   for (int i = 0; i < n_found; i++) {
     status[i] = -123;
   }
@@ -664,7 +672,7 @@ int do_switch(int n_found) {
         int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
 
         //// start of gureya's code ///
-        active_num_threads = 1
+        active_num_threads = 1;
         //pages are being sent to NVRAM
         size_t j;
         struct thread_data *pdata;
@@ -770,6 +778,10 @@ int do_switch(int n_found) {
         int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
 
         //// start of gureya's code ///
+        //measure the time taken by move_pages system call by this thread!
+        struct timeval tstart, tend;
+        unsigned long exec_time;
+
         active_num_threads = max_num_threads;
         //pages are being sent to DRAM
         size_t j;
