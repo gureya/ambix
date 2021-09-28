@@ -564,13 +564,13 @@ int do_migration(int mode, int n_found) {
       }
       pdata->thread_page_count = thread_page_count;
       pdata->thread_no = j;
-      pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-      pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-      pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-      if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-        printf("Unable to allocate memory\n");
-        exit(1);
-      }
+      /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+       pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+       pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+       if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+       printf("Unable to allocate memory\n");
+       exit(1);
+       }*/
 
       pdata->cur_addr = addr_displacement + start;
       pdata->cur_nodes = dest_nodes_displacement + start;
@@ -695,13 +695,13 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-          pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-          pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-          if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-            printf("Unable to allocate memory\n");
-            exit(1);
-          }
+          /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+           pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+           pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+           if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+           printf("Unable to allocate memory\n");
+           exit(1);
+           }*/
 
           pdata->cur_addr = addr_displacement + start;
           pdata->cur_nodes = dest_nodes_displacement + start;
@@ -805,13 +805,13 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-          pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-          pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-          if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-            printf("Unable to allocate memory\n");
-            exit(1);
-          }
+          /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+           pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+           pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+           if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+           printf("Unable to allocate memory\n");
+           exit(1);
+           }*/
 
           pdata->cur_addr = addr_displacement + start;
           pdata->cur_nodes = dest_nodes_displacement + start;
