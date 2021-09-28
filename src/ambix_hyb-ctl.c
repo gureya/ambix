@@ -323,7 +323,7 @@ void worker(void *pdata) {
   printf("thread_no: %ld\t my_page_count: %d \tmove_pages concluded in %ldms\n",
          tn->thread_no, tn->thread_page_count, exec_time / 1000);
 
-  free(pdata);
+  //free(pdata);
 }
 
 ////// END GUREYA'S ADDITIONS - FUNCTIONS! ////
