@@ -540,8 +540,8 @@ int do_migration(int mode, int n_found) {
 
     //// start of gureya's code ///
     //measure the time taken by move_pages system call by this thread!
-    struct timeval tstart, tend;
-    unsigned long exec_time;
+    //struct timeval tstart, tend;
+    //unsigned long exec_time;
 
     size_t j;
     struct thread_data *pdata;
@@ -550,7 +550,7 @@ int do_migration(int mode, int n_found) {
     int thread_page_count = i / active_num_threads;
     int remainder_ = i % active_num_threads;
 
-    gettimeofday(&tstart, NULL);
+    //gettimeofday(&tstart, NULL);
     for (j = 0; j < active_num_threads; j++) {
       pdata = malloc(sizeof(struct thread_data));
       assert(pdata);
@@ -585,7 +585,7 @@ int do_migration(int mode, int n_found) {
 
     //wait for the threads to finish work!
     tpool_wait(tm);
-    gettimeofday(&tend, NULL);
+    //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
 
     // For now I assume that move pages never fails!
@@ -617,8 +617,8 @@ int do_switch(int n_found) {
   int *status = malloc(sizeof(int) * n_found);
 
   //measure the time taken by move_pages system call by this thread!
-  struct timeval tstart, tend;
-  unsigned long exec_time;
+  //struct timeval tstart, tend;
+  //unsigned long exec_time;
 
   for (int i = 0; i < n_found; i++) {
     status[i] = -123;
@@ -681,7 +681,7 @@ int do_switch(int n_found) {
         int thread_page_count = i / active_num_threads;
         int remainder_ = i % active_num_threads;
 
-        gettimeofday(&tstart, NULL);
+        //gettimeofday(&tstart, NULL);
         for (j = 0; j < active_num_threads; j++) {
           pdata = malloc(sizeof(struct thread_data));
           assert(pdata);
@@ -716,7 +716,7 @@ int do_switch(int n_found) {
 
         //wait for the threads to finish work!
         tpool_wait(tm);
-        gettimeofday(&tend, NULL);
+        //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
         //Commented Miguel's code!
@@ -779,8 +779,8 @@ int do_switch(int n_found) {
 
         //// start of gureya's code ///
         //measure the time taken by move_pages system call by this thread!
-        struct timeval tstart, tend;
-        unsigned long exec_time;
+        //struct timeval tstart, tend;
+        //unsigned long exec_time;
 
         active_num_threads = max_num_threads;
         //pages are being sent to DRAM
@@ -791,7 +791,7 @@ int do_switch(int n_found) {
         int thread_page_count = i / active_num_threads;
         int remainder_ = i % active_num_threads;
 
-        gettimeofday(&tstart, NULL);
+        //gettimeofday(&tstart, NULL);
         for (j = 0; j < active_num_threads; j++) {
           pdata = malloc(sizeof(struct thread_data));
           assert(pdata);
@@ -826,7 +826,7 @@ int do_switch(int n_found) {
 
         //wait for the threads to finish work!
         tpool_wait(tm);
-        gettimeofday(&tend, NULL);
+        //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
         //Commented Miguel's code, for now assume that move_pages never fails!
