@@ -24,34 +24,11 @@
 ///// BEGIN GUREYA'S ADDITIONS - VARIABLES & HEADER FILES! /////
 #include <sys/time.h>
 #include <assert.h>
-#include "tpool.h"
+#include "thpool.h"
 
 size_t max_num_threads = 1;  //Total number of threads for the thread pool!
 size_t active_num_threads = 1;  //Current number of threads used to migrate pages!
-pthread_t *cur_threads;
-
-//Object data
-struct tpool_work {
-  thread_func_t func;
-  void *arg;
-  struct tpool_work *next;
-};
-typedef struct tpool_work tpool_work_t;
-
-//Work queue implemented as a simple linked list!
-struct tpool {
-  tpool_work_t *work_first;
-  tpool_work_t *work_last;
-  pthread_mutex_t work_mutex;
-  pthread_cond_t work_cond;
-  pthread_cond_t working_cond;
-  size_t working_cnt;
-  size_t thread_cnt;
-  bool stop;
-};
-
-tpool_t *tm;
-
+threadpool thpool;
 //What each thread will process!
 struct thread_data {
   void **cur_addr;
@@ -102,206 +79,6 @@ unsigned long time_diff(struct timeval *start, struct timeval *stop) {
 }
 
 /*
- * Simple helper for creating work objects
- */
-static tpool_work_t* tpool_work_create(thread_func_t func, void *arg) {
-  tpool_work_t *work;
-
-  if (func == NULL)
-    return NULL;
-
-  work = malloc(sizeof(*work));
-  work->func = func;
-  work->arg = arg;
-  work->next = NULL;
-  return work;
-}
-
-/*
- * Simple helper for destroying work objects
- */
-static void tpool_work_destroy(tpool_work_t *work) {
-  if (work == NULL)
-    return;
-  free(work);
-}
-
-/*
- * Helper for pulling work from the Queue
- */
-static tpool_work_t* tpool_work_get(tpool_t *tm) {
-  tpool_work_t *work;
-
-  if (tm == NULL)
-    return NULL;
-
-  work = tm->work_first;
-  if (work == NULL)
-    return NULL;
-
-  if (work->next == NULL) {
-    tm->work_first = NULL;
-    tm->work_last = NULL;
-  } else {
-    tm->work_first = work->next;
-  }
-
-  return work;
-}
-
-/*
- * The worker function!
- */
-static void* tpool_worker(void *arg) {
-  tpool_t *tm = arg;
-  tpool_work_t *work;
-
-  while (1) {
-    pthread_mutex_lock(&(tm->work_mutex));
-
-    while (tm->work_first == NULL && !tm->stop)
-      pthread_cond_wait(&(tm->work_cond), &(tm->work_mutex));
-
-    if (tm->stop)
-      break;
-
-    work = tpool_work_get(tm);
-    tm->working_cnt++;
-    pthread_mutex_unlock(&(tm->work_mutex));
-
-    if (work != NULL) {
-      work->func(work->arg);
-      tpool_work_destroy(work);
-    }
-
-    pthread_mutex_lock(&(tm->work_mutex));
-    tm->working_cnt--;
-    if (!tm->stop && tm->working_cnt == 0 && tm->work_first == NULL)
-      pthread_cond_signal(&(tm->working_cond));
-    pthread_mutex_unlock(&(tm->work_mutex));
-  }
-
-  tm->thread_cnt--;
-  pthread_cond_signal(&(tm->working_cond));
-  pthread_mutex_unlock(&(tm->work_mutex));
-  return NULL;
-}
-
-/*
- * Pool create function!
- *
- * The minimum number of threads in the pool is 2!
- *
- */
-tpool_t* tpool_create(size_t num) {
-  tpool_t *tm;
-  pthread_t thread;
-  size_t i;
-
-  if (num == 0)
-    num = 2;
-
-  tm = calloc(1, sizeof(*tm));
-  tm->thread_cnt = num;
-
-  pthread_mutex_init(&(tm->work_mutex), NULL);
-  pthread_cond_init(&(tm->work_cond), NULL);
-  pthread_cond_init(&(tm->working_cond), NULL);
-
-  tm->work_first = NULL;
-  tm->work_last = NULL;
-
-  for (i = 0; i < num; i++) {
-    pthread_create(&thread, NULL, tpool_worker, tm);
-    pthread_detach(thread);
-  }
-
-  printf("\nThread pool has been created successfully with %ld threads\n", num);
-
-  return tm;
-}
-
-/*
- * Pool destroy function!
- */
-void tpool_destroy(tpool_t *tm) {
-  tpool_work_t *work;
-  tpool_work_t *work2;
-
-  if (tm == NULL)
-    return;
-
-  pthread_mutex_lock(&(tm->work_mutex));
-  work = tm->work_first;
-  while (work != NULL) {
-    work2 = work->next;
-    tpool_work_destroy(work);
-    work = work2;
-  }
-  tm->stop = true;
-  pthread_cond_broadcast(&(tm->work_cond));
-  pthread_mutex_unlock(&(tm->work_mutex));
-
-  tpool_wait(tm);
-
-  pthread_mutex_destroy(&(tm->work_mutex));
-  pthread_cond_destroy(&(tm->work_cond));
-  pthread_cond_destroy(&(tm->working_cond));
-
-  free(tm);
-}
-
-/*
- * Adding work to the Queue!
- */
-bool tpool_add_work(tpool_t *tm, thread_func_t func, void *arg) {
-  tpool_work_t *work;
-
-  if (tm == NULL)
-    return false;
-
-  work = tpool_work_create(func, arg);
-  if (work == NULL)
-    return false;
-
-  pthread_mutex_lock(&(tm->work_mutex));
-  if (tm->work_first == NULL) {
-    tm->work_first = work;
-    tm->work_last = tm->work_first;
-  } else {
-    tm->work_last->next = work;
-    tm->work_last = work;
-  }
-
-  pthread_cond_broadcast(&(tm->work_cond));
-  pthread_mutex_unlock(&(tm->work_mutex));
-
-  return true;
-}
-
-/*
- * Waiting for processing to complete
- * This is a blocking function that only returns when there is no work!
- */
-void tpool_wait(tpool_t *tm) {
-  if (tm == NULL)
-    return;
-
-  pthread_mutex_lock(&(tm->work_mutex));
-  while (1) {
-    if ((!tm->stop && tm->working_cnt != 0)
-        || (tm->stop && tm->thread_cnt != 0)) {
-      pthread_cond_wait(&(tm->working_cond), &(tm->work_mutex));
-    } else {
-      break;
-    }
-  }
-  pthread_mutex_unlock(&(tm->work_mutex));
-
-  //printf("\n All threads have finished their work, there is no more work\n");
-}
-
-/*
  * thread work function
  */
 void worker(void *pdata) {
@@ -324,7 +101,7 @@ void worker(void *pdata) {
   printf("thread_no: %ld\t my_page_count: %d \tmove_pages concluded in %ldms\n",
          tn->thread_no, tn->thread_page_count, exec_time / 1000);
 
-  free(pdata);
+  //free(pdata);
 }
 
 ////// END GUREYA'S ADDITIONS - FUNCTIONS! ////
@@ -536,12 +313,8 @@ int do_migration(int mode, int n_found) {
             && (n_migrated + i < n_processed); i++)
       ;
 
-    //void **addr_displacement = addr + n_migrated;
-    //int *dest_nodes_displacement = dest_nodes + n_migrated;
-
-    active_num_threads = 1;
-    void *thread_status;
-    cur_threads = (pthread_t*) malloc(active_num_threads * sizeof(pthread_t));
+    void **addr_displacement = addr + n_migrated;
+    int *dest_nodes_displacement = dest_nodes + n_migrated;
 
     //// start of gureya's code ///
     size_t j;
@@ -554,13 +327,13 @@ int do_migration(int mode, int n_found) {
     //gettimeofday(&tstart, NULL);
     for (j = 0; j < active_num_threads; j++) {
       pdata = malloc(sizeof(struct thread_data));
-      pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-      pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-      pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-      if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-        printf("Unable to allocate memory\n");
-        exit(1);
-      }
+      /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+       pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+       pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+       if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+       printf("Unable to allocate memory\n");
+       exit(1);
+       }*/
       assert(pdata);
       start = j * thread_page_count;
       end = start + thread_page_count;
@@ -573,27 +346,21 @@ int do_migration(int mode, int n_found) {
       pdata->thread_page_count = thread_page_count;
       pdata->thread_no = j;
 
-      //pdata->cur_addr = addr_displacement + start;
-      //pdata->cur_nodes = dest_nodes_displacement + start;
-      //pdata->cur_status = status + start;
-
-      pdata->cur_addr = addr + n_migrated + start;
-      pdata->cur_nodes = dest_nodes + n_migrated + start;
+      pdata->cur_addr = addr_displacement + start;
+      pdata->cur_nodes = dest_nodes_displacement + start;
       pdata->cur_status = status + start;
-      pdata->cur_pid = curr_pid;
 
-      //tpool_add_work(tm, worker, (void*) pdata);
-      pthread_create(&cur_threads[j], NULL, worker, (void*) pdata);
+      /*pdata->cur_addr = addr + n_migrated + start;
+       pdata->cur_nodes = dest_nodes + n_migrated + start;
+       pdata->cur_status = status + start;
+       pdata->cur_pid = curr_pid;*/
+
+      thpool_add_work(thpool, worker, (void*) pdata);
     }
 
-    /* Wait on child threads */
-    for (int i = 0; i < active_num_threads; i++) {
-      pthread_join(cur_threads[i], &my_status);
-    }
-    free(cur_threads);
     //wait for the threads to finish work!
-    //tpool_wait(tm);
-    //free(pdata);
+    thpool_wait(thpool);
+    free(pdata);
     //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
     // For now I assume that move pages never fails!
@@ -673,16 +440,11 @@ int do_switch(int n_found) {
             (candidates[n_found + 1 + n_migrated + i].pid_retval == curr_pid)
                 && (n_migrated + i < dram_processed); i++)
           ;
-        //void **addr_displacement = addr_dram + n_migrated;
-        //int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
-
-        active_num_threads = 1;
-        void *thread_status;
-        cur_threads = (pthread_t*) malloc(
-            active_num_threads * sizeof(pthread_t));
+        void **addr_displacement = addr_dram + n_migrated;
+        int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
 
         //// start of gureya's code ///
-        //active_num_threads = 1;
+        active_num_threads = 1;
         //pages are being sent to NVRAM
         size_t j;
         struct thread_data *pdata;
@@ -712,28 +474,24 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          //pdata->cur_addr = addr_displacement + start;
-          //pdata->cur_nodes = dest_nodes_displacement + start;
-          //pdata->cur_status = status + start;
-
-          pdata->cur_addr = addr_dram + n_migrated + start;
-          pdata->cur_nodes = dest_nodes_nvram + n_migrated + start;
+          pdata->cur_addr = addr_displacement + start;
+          pdata->cur_nodes = dest_nodes_displacement + start;
           pdata->cur_status = status + start;
+
+          /*pdata->cur_addr = addr_dram + n_migrated + start;
+           pdata->cur_nodes = dest_nodes_nvram + n_migrated + start;
+           pdata->cur_status = status + start;*/
 
           pdata->cur_pid = curr_pid;
 
           //tpool_add_work(tm, worker, (void*) pdata);
-          pthread_create(&cur_threads[j], NULL, worker, (void*) pdata);
+          thpool_add_work(thpool, worker, (void*) pdata);
         }
 
         /* Wait on child threads */
-        for (int i = 0; i < active_num_threads; i++) {
-          pthread_join(cur_threads[i], &my_status);
-        }
-        free(cur_threads);
         //wait for the threads to finish work!
-        //tpool_wait(tm);
-        //free(pdata);
+        thpool_wait(thpool);
+        free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
@@ -793,16 +551,11 @@ int do_switch(int n_found) {
             (candidates[n_migrated + i].pid_retval == curr_pid)
                 && (n_migrated + i < nvram_processed); i++)
           ;
-        // void **addr_displacement = addr_nvram + n_migrated;
-        // int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
-
-        active_num_threads = max_num_threads;
-        void *thread_status;
-        cur_threads = (pthread_t*) malloc(
-            active_num_threads * sizeof(pthread_t));
+        void **addr_displacement = addr_nvram + n_migrated;
+        int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
 
         //// start of gureya's code ///
-        //active_num_threads = max_num_threads;
+        active_num_threads = max_num_threads;
         //pages are being sent to DRAM
         size_t j;
         struct thread_data *pdata;
@@ -832,33 +585,27 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          //pdata->cur_addr = addr_displacement + start;
-          //pdata->cur_nodes = dest_nodes_displacement + start;
-          //pdata->cur_status = status + start;
-
-          pdata->cur_addr = addr_nvram + n_migrated + start;
-          pdata->cur_nodes = dest_nodes_dram + n_migrated + start;
+          pdata->cur_addr = addr_displacement + start;
+          pdata->cur_nodes = dest_nodes_displacement + start;
           pdata->cur_status = status + start;
+
+          /*pdata->cur_addr = addr_nvram + n_migrated + start;
+           pdata->cur_nodes = dest_nodes_dram + n_migrated + start;
+           pdata->cur_status = status + start;*/
 
           pdata->cur_pid = curr_pid;
 
           //tpool_add_work(tm, worker, (void*) pdata);
-          pthread_create(&cur_threads[j], NULL, worker, (void*) pdata);
+          thpool_add_work(thpool, worker, (void*) pdata);
         }
 
         //wait for the threads to finish work!
         /* Wait on child threads */
-        for (int i = 0; i < active_num_threads; i++) {
-          pthread_join(cur_threads[i], &my_status);
-        }
-        free(cur_threads);
-        //tpool_wait(tm);
-        //free(pdata);
+        thpool_wait(thpool);
+        free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
-
         //Commented Miguel's code, for now assume that move_pages never fails!
-
         /*if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
          dest_nodes_displacement, status, 0)) {
          // Migrate all and output addresses that could not migrate
@@ -1466,7 +1213,8 @@ int main() {
   configure_netlink_inbound();
 
 // create the thread pool equal to maximum number of threads!
-  tm = tpool_create(max_num_threads);
+  printf("Making threadpool with %ld threads\n", max_num_threads);
+  thpool = thpool_init(max_num_threads);
 
   if (bind(netlink_fd, (struct sockaddr *) &src_addr, sizeof(src_addr))) {
     printf("Error binding netlink socket fd: %s\n", strerror(errno));

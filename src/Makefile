@@ -30,8 +30,8 @@ remove:
 force-remove:
 	sudo rmmod -f $(MODULE_FILENAME)
 
-ctl: ambix_hyb-ctl.c ambix.h
-	${CC} ${CFLAGS} -o ambix_hyb-ctl.o ambix_hyb-ctl.c
+ctl: thpool.c ambix_hyb-ctl.c thpool.h ambix.h
+	${CC} ${CFLAGS} -o ambix_hyb-ctl.o thpool.c ambix_hyb-ctl.c
 
 client: client.c client_2.c ambix-client.c ambix.h ambix-client.h
 	${CC} ${CFLAGS} -o client.o ambix-client.c client.c
