@@ -324,6 +324,9 @@ void worker(void *pdata) {
          tn->thread_no, tn->thread_page_count, exec_time / 1000);
 
   free(pdata);
+  //free(pdata->cur_addr);
+  //free(pdata->cur_status);
+  //free(pdata->cur_nodes);
 }
 
 ////// END GUREYA'S ADDITIONS - FUNCTIONS! ////
@@ -549,6 +552,13 @@ int do_migration(int mode, int n_found) {
     //gettimeofday(&tstart, NULL);
     for (j = 0; j < active_num_threads; j++) {
       pdata = malloc(sizeof(struct thread_data));
+      pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+      pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+      pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+      if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+        printf("Unable to allocate memory\n");
+        exit(1);
+      }
       assert(pdata);
       start = j * thread_page_count;
       end = start + thread_page_count;
@@ -667,6 +677,13 @@ int do_switch(int n_found) {
         //gettimeofday(&tstart, NULL);
         for (j = 0; j < active_num_threads; j++) {
           pdata = malloc(sizeof(struct thread_data));
+	  pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+	  pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+	  pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+	  if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+		  printf("Unable to allocate memory\n");
+		  exit(1);
+	  }
           assert(pdata);
           start = j * thread_page_count;
           end = start + thread_page_count;
@@ -764,6 +781,13 @@ int do_switch(int n_found) {
         for (j = 0; j < active_num_threads; j++) {
           pdata = malloc(sizeof(struct thread_data));
           assert(pdata);
+	  pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+	  pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+	  pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+	  if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+		  printf("Unable to allocate memory\n");
+		  exit(1);
+	  }
           start = j * thread_page_count;
           end = start + thread_page_count;
 
