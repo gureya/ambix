@@ -26,7 +26,7 @@
 #include <assert.h>
 #include "tpool.h"
 
-size_t max_num_threads = 28;  //Total number of threads for the thread pool!
+size_t max_num_threads = 1;  //Total number of threads for the thread pool!
 size_t active_num_threads = 1;  //Current number of threads used to migrate pages!
 
 //Object data
@@ -215,7 +215,7 @@ tpool_t* tpool_create(size_t num) {
     pthread_detach(thread);
   }
 
-  printf("\nThread pool has been created successfully\n");
+  printf("\nThread pool has been created successfully with %ld threads\n", num);
 
   return tm;
 }
@@ -539,10 +539,6 @@ int do_migration(int mode, int n_found) {
     int *dest_nodes_displacement = dest_nodes + n_migrated;
 
     //// start of gureya's code ///
-    //measure the time taken by move_pages system call by this thread!
-    //struct timeval tstart, tend;
-    //unsigned long exec_time;
-
     size_t j;
     struct thread_data *pdata;
     int start, end;
@@ -564,27 +560,18 @@ int do_migration(int mode, int n_found) {
       }
       pdata->thread_page_count = thread_page_count;
       pdata->thread_no = j;
-      /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-       pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-       pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-       if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-       printf("Unable to allocate memory\n");
-       exit(1);
-       }*/
 
       pdata->cur_addr = addr_displacement + start;
       pdata->cur_nodes = dest_nodes_displacement + start;
       pdata->cur_status = status + start;
       pdata->cur_pid = curr_pid;
 
-      /*printf("thread_no: %ld\tstart: %d\tend: %d\tthread_page_count: %d\n",
-       pdata->thread_no, start, end, pdata->thread_page_count);*/
-
       tpool_add_work(tm, worker, (void*) pdata);
     }
 
     //wait for the threads to finish work!
     tpool_wait(tm);
+    free(pdata);
     //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
 
@@ -615,10 +602,6 @@ int do_switch(int n_found) {
   void **addr_nvram = malloc(sizeof(unsigned long) * n_found);
   int *dest_nodes_nvram = malloc(sizeof(int) * n_found);
   int *status = malloc(sizeof(int) * n_found);
-
-  //measure the time taken by move_pages system call by this thread!
-  //struct timeval tstart, tend;
-  //unsigned long exec_time;
 
   for (int i = 0; i < n_found; i++) {
     status[i] = -123;
@@ -695,27 +678,17 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-           pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-           pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-           if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-           printf("Unable to allocate memory\n");
-           exit(1);
-           }*/
-
           pdata->cur_addr = addr_displacement + start;
           pdata->cur_nodes = dest_nodes_displacement + start;
           pdata->cur_status = status + start;
           pdata->cur_pid = curr_pid;
-
-          /*printf("thread_no: %ld\tstart: %d\tend: %d\tthread_page_count: %d\n",
-           pdata->thread_no, start, end, pdata->thread_page_count);*/
 
           tpool_add_work(tm, worker, (void*) pdata);
         }
 
         //wait for the threads to finish work!
         tpool_wait(tm);
+        free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
@@ -778,10 +751,6 @@ int do_switch(int n_found) {
         int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
 
         //// start of gureya's code ///
-        //measure the time taken by move_pages system call by this thread!
-        //struct timeval tstart, tend;
-        //unsigned long exec_time;
-
         active_num_threads = max_num_threads;
         //pages are being sent to DRAM
         size_t j;
@@ -805,27 +774,17 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-           pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-           pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-           if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-           printf("Unable to allocate memory\n");
-           exit(1);
-           }*/
-
           pdata->cur_addr = addr_displacement + start;
           pdata->cur_nodes = dest_nodes_displacement + start;
           pdata->cur_status = status + start;
           pdata->cur_pid = curr_pid;
-
-          /*printf("thread_no: %ld\tstart: %d\tend: %d\tthread_page_count: %d\n",
-           pdata->thread_no, start, end, pdata->thread_page_count);*/
 
           tpool_add_work(tm, worker, (void*) pdata);
         }
 
         //wait for the threads to finish work!
         tpool_wait(tm);
+        free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
