@@ -28,6 +28,7 @@
 
 size_t max_num_threads = 1;  //Total number of threads for the thread pool!
 size_t active_num_threads = 1;  //Current number of threads used to migrate pages!
+pthread_t *cur_threads;
 
 //Object data
 struct tpool_work {
@@ -324,9 +325,6 @@ void worker(void *pdata) {
          tn->thread_no, tn->thread_page_count, exec_time / 1000);
 
   free(pdata);
-  //free(pdata->cur_addr);
-  //free(pdata->cur_status);
-  //free(pdata->cur_nodes);
 }
 
 ////// END GUREYA'S ADDITIONS - FUNCTIONS! ////
@@ -538,11 +536,15 @@ int do_migration(int mode, int n_found) {
             && (n_migrated + i < n_processed); i++)
       ;
 
-    void **addr_displacement = addr + n_migrated;
-    int *dest_nodes_displacement = dest_nodes + n_migrated;
+    //void **addr_displacement = addr + n_migrated;
+    //int *dest_nodes_displacement = dest_nodes + n_migrated;
+
+    active_num_threads = 1;
+    void *thread_status;
+    cur_threads = (pthread_t*) malloc(active_num_threads * sizeof(pthread_t));
 
     //// start of gureya's code ///
-    /*size_t j;
+    size_t j;
     struct thread_data *pdata;
     int start, end;
 
@@ -574,34 +576,40 @@ int do_migration(int mode, int n_found) {
       //pdata->cur_addr = addr_displacement + start;
       //pdata->cur_nodes = dest_nodes_displacement + start;
       //pdata->cur_status = status + start;
-      
+
       pdata->cur_addr = addr + n_migrated + start;
       pdata->cur_nodes = dest_nodes + n_migrated + start;
       pdata->cur_status = status + start;
       pdata->cur_pid = curr_pid;
 
-      tpool_add_work(tm, worker, (void*) pdata);
+      //tpool_add_work(tm, worker, (void*) pdata);
+      pthread_create(&cur_threads[j], NULL, worker, (void*) pdata);
     }
 
+    /* Wait on child threads */
+    for (int i = 0; i < active_num_threads; i++) {
+      pthread_join(cur_threads[i], &my_status);
+    }
+    free(cur_threads);
     //wait for the threads to finish work!
-    tpool_wait(tm);
+    //tpool_wait(tm);
     //free(pdata);
     //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
-    // For now I assume that move pages never fails!*/
+    // For now I assume that move pages never fails!
     printf("Inside do_migration function\n");
-    if (move_pages(curr_pid, (unsigned long) i, addr_displacement,
+    /*if (move_pages(curr_pid, (unsigned long) i, addr_displacement,
      dest_nodes_displacement, status, 0)) {
      // Migrate all and output addresses that could not migrate
-     /*for (int j = 0; j < i; j++) {
+     for (int j = 0; j < i; j++) {
      if (move_pages(curr_pid, 1, addr_displacement + j,
      dest_nodes_displacement + j, status, 0)) {
      printf("Error migrating addr: %ld, pid: %d\n",
      (unsigned long) *(addr_displacement + j), curr_pid);
      e++;
      }
-     }*/
      }
+     }*/
   }
 
   free(addr);
@@ -665,11 +673,16 @@ int do_switch(int n_found) {
             (candidates[n_found + 1 + n_migrated + i].pid_retval == curr_pid)
                 && (n_migrated + i < dram_processed); i++)
           ;
-        void **addr_displacement = addr_dram + n_migrated;
-        int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
+        //void **addr_displacement = addr_dram + n_migrated;
+        //int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
+
+        active_num_threads = 1;
+        void *thread_status;
+        cur_threads = (pthread_t*) malloc(
+            active_num_threads * sizeof(pthread_t));
 
         //// start of gureya's code ///
-        /*active_num_threads = 1;
+        //active_num_threads = 1;
         //pages are being sent to NVRAM
         size_t j;
         struct thread_data *pdata;
@@ -681,13 +694,13 @@ int do_switch(int n_found) {
         //gettimeofday(&tstart, NULL);
         for (j = 0; j < active_num_threads; j++) {
           pdata = malloc(sizeof(struct thread_data));
-	  pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-	  pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-	  pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-	  if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-		  printf("Unable to allocate memory\n");
-		  exit(1);
-	  }
+          /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+           pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+           pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+           if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+           printf("Unable to allocate memory\n");
+           exit(1);
+           }*/
           assert(pdata);
           start = j * thread_page_count;
           end = start + thread_page_count;
@@ -703,35 +716,41 @@ int do_switch(int n_found) {
           //pdata->cur_nodes = dest_nodes_displacement + start;
           //pdata->cur_status = status + start;
 
-	  pdata->cur_addr = addr_dram + n_migrated + start;
-	  pdata->cur_nodes = dest_nodes_nvram + n_migrated + start;
-	  pdata->cur_status = status + start;
+          pdata->cur_addr = addr_dram + n_migrated + start;
+          pdata->cur_nodes = dest_nodes_nvram + n_migrated + start;
+          pdata->cur_status = status + start;
 
           pdata->cur_pid = curr_pid;
 
-          tpool_add_work(tm, worker, (void*) pdata);
+          //tpool_add_work(tm, worker, (void*) pdata);
+          pthread_create(&cur_threads[j], NULL, worker, (void*) pdata);
         }
 
+        /* Wait on child threads */
+        for (int i = 0; i < active_num_threads; i++) {
+          pthread_join(cur_threads[i], &my_status);
+        }
+        free(cur_threads);
         //wait for the threads to finish work!
-        tpool_wait(tm);
+        //tpool_wait(tm);
         //free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
         //Commented Miguel's code!
-	*/
-        if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
+
+        /* if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
          dest_nodes_displacement, status, 0)) {
          // Migrate all and output addresses that could not migrate
-         /*for (int j = 0; j < i; j++) {
+         for (int j = 0; j < i; j++) {
          if (numa_move_pages(curr_pid, 1, addr_displacement + j,
          dest_nodes_displacement + j, status, 0)) {
          printf("Error migrating DRAM/MEM addr: %ld, pid: %d\n",
          (unsigned long) *(addr_displacement + j), curr_pid);
          dram_e++;
          }
-         }*/
          }
+         }*/
       }
     } else {
       dram_free = 0;
@@ -774,11 +793,16 @@ int do_switch(int n_found) {
             (candidates[n_migrated + i].pid_retval == curr_pid)
                 && (n_migrated + i < nvram_processed); i++)
           ;
-        void **addr_displacement = addr_nvram + n_migrated;
-        int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
+        // void **addr_displacement = addr_nvram + n_migrated;
+        // int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
+
+        active_num_threads = max_num_threads;
+        void *thread_status;
+        cur_threads = (pthread_t*) malloc(
+            active_num_threads * sizeof(pthread_t));
 
         //// start of gureya's code ///
-        /*active_num_threads = max_num_threads;
+        //active_num_threads = max_num_threads;
         //pages are being sent to DRAM
         size_t j;
         struct thread_data *pdata;
@@ -791,13 +815,13 @@ int do_switch(int n_found) {
         for (j = 0; j < active_num_threads; j++) {
           pdata = malloc(sizeof(struct thread_data));
           assert(pdata);
-	  pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
-	  pdata->cur_status = malloc(sizeof(int) * thread_page_count);
-	  pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
-	  if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
-		  printf("Unable to allocate memory\n");
-		  exit(1);
-	  }
+          /*pdata->cur_addr = malloc(sizeof(unsigned long) * thread_page_count);
+           pdata->cur_status = malloc(sizeof(int) * thread_page_count);
+           pdata->cur_nodes = malloc(sizeof(int) * thread_page_count);
+           if (!pdata->cur_addr || !pdata->cur_status || !pdata->cur_nodes) {
+           printf("Unable to allocate memory\n");
+           exit(1);
+           }*/
           start = j * thread_page_count;
           end = start + thread_page_count;
 
@@ -811,36 +835,42 @@ int do_switch(int n_found) {
           //pdata->cur_addr = addr_displacement + start;
           //pdata->cur_nodes = dest_nodes_displacement + start;
           //pdata->cur_status = status + start;
-	  
-	  pdata->cur_addr = addr_nvram + n_migrated + start;
-	  pdata->cur_nodes = dest_nodes_dram + n_migrated + start;
-	  pdata->cur_status = status + start;
+
+          pdata->cur_addr = addr_nvram + n_migrated + start;
+          pdata->cur_nodes = dest_nodes_dram + n_migrated + start;
+          pdata->cur_status = status + start;
 
           pdata->cur_pid = curr_pid;
 
-          tpool_add_work(tm, worker, (void*) pdata);
+          //tpool_add_work(tm, worker, (void*) pdata);
+          pthread_create(&cur_threads[j], NULL, worker, (void*) pdata);
         }
 
         //wait for the threads to finish work!
-        tpool_wait(tm);
+        /* Wait on child threads */
+        for (int i = 0; i < active_num_threads; i++) {
+          pthread_join(cur_threads[i], &my_status);
+        }
+        free(cur_threads);
+        //tpool_wait(tm);
         //free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
         //Commented Miguel's code, for now assume that move_pages never fails!
-        */
-	if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
+
+        /*if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
          dest_nodes_displacement, status, 0)) {
          // Migrate all and output addresses that could not migrate
-         /*for (int j = 0; j < i; j++) {
+         for (int j = 0; j < i; j++) {
          if (numa_move_pages(curr_pid, 1, addr_displacement + j,
          dest_nodes_displacement + j, status, 0)) {
          printf("Error migrating NVRAM addr: %ld, pid: %d\n",
          (unsigned long) *(addr_displacement + j), curr_pid);
          nvram_e++;
          }
-         }*/
          }
+         }*/
       }
     } else {
       nvram_free = 0;
@@ -874,7 +904,7 @@ int send_req(req_t req, addr_info_t **out) {
   memcpy(NLMSG_DATA(nlmh_out), &req, sizeof(req));
   sendmsg(netlink_fd, &msg_out, 0);
 
-  //configure_netlink_inbound();
+//configure_netlink_inbound();
   memset(buffer, 0, buf_size);
   int len = recvmsg(netlink_fd, &msg_in, 0);
 
@@ -1316,7 +1346,7 @@ void *process_stdin(void *args) {
 }
 
 void *process_socket(void *args) {
-  // Unix domain socket
+// Unix domain socket
   struct sockaddr_un uds_addr;
   int unix_fd, sel, acc, rd;
   req_t unix_req;
@@ -1435,7 +1465,7 @@ int main() {
   configure_netlink_outbound();
   configure_netlink_inbound();
 
-  // create the thread pool equal to maximum number of threads!
+// create the thread pool equal to maximum number of threads!
   tm = tpool_create(max_num_threads);
 
   if (bind(netlink_fd, (struct sockaddr *) &src_addr, sizeof(src_addr))) {
