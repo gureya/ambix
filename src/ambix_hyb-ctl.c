@@ -542,7 +542,7 @@ int do_migration(int mode, int n_found) {
     int *dest_nodes_displacement = dest_nodes + n_migrated;
 
     //// start of gureya's code ///
-    size_t j;
+    /*size_t j;
     struct thread_data *pdata;
     int start, end;
 
@@ -571,8 +571,12 @@ int do_migration(int mode, int n_found) {
       pdata->thread_page_count = thread_page_count;
       pdata->thread_no = j;
 
-      pdata->cur_addr = addr_displacement + start;
-      pdata->cur_nodes = dest_nodes_displacement + start;
+      //pdata->cur_addr = addr_displacement + start;
+      //pdata->cur_nodes = dest_nodes_displacement + start;
+      //pdata->cur_status = status + start;
+      
+      pdata->cur_addr = addr + n_migrated + start;
+      pdata->cur_nodes = dest_nodes + n_migrated + start;
       pdata->cur_status = status + start;
       pdata->cur_pid = curr_pid;
 
@@ -584,20 +588,20 @@ int do_migration(int mode, int n_found) {
     //free(pdata);
     //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
-
-    // For now I assume that move pages never fails!
-    /*if (move_pages(curr_pid, (unsigned long) i, addr_displacement,
+    // For now I assume that move pages never fails!*/
+    printf("Inside do_migration function\n");
+    if (move_pages(curr_pid, (unsigned long) i, addr_displacement,
      dest_nodes_displacement, status, 0)) {
      // Migrate all and output addresses that could not migrate
-     for (int j = 0; j < i; j++) {
+     /*for (int j = 0; j < i; j++) {
      if (move_pages(curr_pid, 1, addr_displacement + j,
      dest_nodes_displacement + j, status, 0)) {
      printf("Error migrating addr: %ld, pid: %d\n",
      (unsigned long) *(addr_displacement + j), curr_pid);
      e++;
      }
-     }
      }*/
+     }
   }
 
   free(addr);
@@ -665,7 +669,7 @@ int do_switch(int n_found) {
         int *dest_nodes_displacement = dest_nodes_nvram + n_migrated;
 
         //// start of gureya's code ///
-        active_num_threads = 1;
+        /*active_num_threads = 1;
         //pages are being sent to NVRAM
         size_t j;
         struct thread_data *pdata;
@@ -695,9 +699,14 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          pdata->cur_addr = addr_displacement + start;
-          pdata->cur_nodes = dest_nodes_displacement + start;
-          pdata->cur_status = status + start;
+          //pdata->cur_addr = addr_displacement + start;
+          //pdata->cur_nodes = dest_nodes_displacement + start;
+          //pdata->cur_status = status + start;
+
+	  pdata->cur_addr = addr_dram + n_migrated + start;
+	  pdata->cur_nodes = dest_nodes_nvram + n_migrated + start;
+	  pdata->cur_status = status + start;
+
           pdata->cur_pid = curr_pid;
 
           tpool_add_work(tm, worker, (void*) pdata);
@@ -710,18 +719,19 @@ int do_switch(int n_found) {
         /// end of gureya's code! ///
 
         //Commented Miguel's code!
-        /*if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
+	*/
+        if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
          dest_nodes_displacement, status, 0)) {
          // Migrate all and output addresses that could not migrate
-         for (int j = 0; j < i; j++) {
+         /*for (int j = 0; j < i; j++) {
          if (numa_move_pages(curr_pid, 1, addr_displacement + j,
          dest_nodes_displacement + j, status, 0)) {
          printf("Error migrating DRAM/MEM addr: %ld, pid: %d\n",
          (unsigned long) *(addr_displacement + j), curr_pid);
          dram_e++;
          }
-         }
          }*/
+         }
       }
     } else {
       dram_free = 0;
@@ -768,7 +778,7 @@ int do_switch(int n_found) {
         int *dest_nodes_displacement = dest_nodes_dram + n_migrated;
 
         //// start of gureya's code ///
-        active_num_threads = max_num_threads;
+        /*active_num_threads = max_num_threads;
         //pages are being sent to DRAM
         size_t j;
         struct thread_data *pdata;
@@ -798,9 +808,14 @@ int do_switch(int n_found) {
           }
           pdata->thread_page_count = thread_page_count;
           pdata->thread_no = j;
-          pdata->cur_addr = addr_displacement + start;
-          pdata->cur_nodes = dest_nodes_displacement + start;
-          pdata->cur_status = status + start;
+          //pdata->cur_addr = addr_displacement + start;
+          //pdata->cur_nodes = dest_nodes_displacement + start;
+          //pdata->cur_status = status + start;
+	  
+	  pdata->cur_addr = addr_nvram + n_migrated + start;
+	  pdata->cur_nodes = dest_nodes_dram + n_migrated + start;
+	  pdata->cur_status = status + start;
+
           pdata->cur_pid = curr_pid;
 
           tpool_add_work(tm, worker, (void*) pdata);
@@ -813,18 +828,19 @@ int do_switch(int n_found) {
         /// end of gureya's code! ///
 
         //Commented Miguel's code, for now assume that move_pages never fails!
-        /*if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
+        */
+	if (numa_move_pages(curr_pid, (unsigned long) i, addr_displacement,
          dest_nodes_displacement, status, 0)) {
          // Migrate all and output addresses that could not migrate
-         for (int j = 0; j < i; j++) {
+         /*for (int j = 0; j < i; j++) {
          if (numa_move_pages(curr_pid, 1, addr_displacement + j,
          dest_nodes_displacement + j, status, 0)) {
          printf("Error migrating NVRAM addr: %ld, pid: %d\n",
          (unsigned long) *(addr_displacement + j), curr_pid);
          nvram_e++;
          }
-         }
          }*/
+         }
       }
     } else {
       nvram_free = 0;
