@@ -297,7 +297,7 @@ void tpool_wait(tpool_t *tm) {
   }
   pthread_mutex_unlock(&(tm->work_mutex));
 
-  printf("\n All threads have finished their work, there is no more work\n");
+  //printf("\n All threads have finished their work, there is no more work\n");
 }
 
 /*
@@ -323,7 +323,7 @@ void worker(void *pdata) {
   printf("thread_no: %ld\t my_page_count: %d \tmove_pages concluded in %ldms\n",
          tn->thread_no, tn->thread_page_count, exec_time / 1000);
 
-  //free(pdata);
+  free(pdata);
 }
 
 ////// END GUREYA'S ADDITIONS - FUNCTIONS! ////
@@ -571,7 +571,7 @@ int do_migration(int mode, int n_found) {
 
     //wait for the threads to finish work!
     tpool_wait(tm);
-    free(pdata);
+    //free(pdata);
     //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
 
@@ -688,7 +688,7 @@ int do_switch(int n_found) {
 
         //wait for the threads to finish work!
         tpool_wait(tm);
-        free(pdata);
+        //free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
@@ -784,7 +784,7 @@ int do_switch(int n_found) {
 
         //wait for the threads to finish work!
         tpool_wait(tm);
-        free(pdata);
+        //free(pdata);
         //gettimeofday(&tend, NULL);
         /// end of gureya's code! ///
 
