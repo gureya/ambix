@@ -26,7 +26,7 @@
 #include <assert.h>
 #include "thpool.h"
 
-size_t max_num_threads = 1;  //Total number of threads for the thread pool!
+size_t max_num_threads = 16;  //Total number of threads for the thread pool!
 size_t active_num_threads = 1;  //Current number of threads used to migrate pages!
 threadpool thpool;
 //What each thread will process!
@@ -86,20 +86,20 @@ void worker(void *pdata) {
   struct thread_data *tn = pdata;
 
   //measure the time taken by move_pages system call by this thread!
-  struct timeval tstart, tend;
-  unsigned long exec_time;
+  //struct timeval tstart, tend;
+  //unsigned long exec_time;
 
-  gettimeofday(&tstart, NULL);
+  //gettimeofday(&tstart, NULL);
   rc = move_pages(tn->cur_pid, tn->thread_page_count, tn->cur_addr,
                   tn->cur_nodes, tn->cur_status, 0);
   if (rc < 0) {
     perror("move_pages");
   }
-  gettimeofday(&tend, NULL);
+  //gettimeofday(&tend, NULL);
 
-  exec_time = time_diff(&tstart, &tend);
-  printf("thread_no: %ld\t my_page_count: %d \tmove_pages concluded in %ldms\n",
-         tn->thread_no, tn->thread_page_count, exec_time / 1000);
+  //exec_time = time_diff(&tstart, &tend);
+  //printf("thread_no: %ld\t my_page_count: %d \tmove_pages concluded in %ldms\n",
+  //       tn->thread_no, tn->thread_page_count, exec_time / 1000);
 
   //free(pdata);
 }
@@ -353,7 +353,8 @@ int do_migration(int mode, int n_found) {
       /*pdata->cur_addr = addr + n_migrated + start;
        pdata->cur_nodes = dest_nodes + n_migrated + start;
        pdata->cur_status = status + start;
-       pdata->cur_pid = curr_pid;*/
+       */
+       pdata->cur_pid = curr_pid;
 
       thpool_add_work(thpool, worker, (void*) pdata);
     }
@@ -364,7 +365,7 @@ int do_migration(int mode, int n_found) {
     //gettimeofday(&tend, NULL);
     /// end of gureya's code! ///
     // For now I assume that move pages never fails!
-    printf("Inside do_migration function\n");
+    //printf("Inside do_migration function\n");
     /*if (move_pages(curr_pid, (unsigned long) i, addr_displacement,
      dest_nodes_displacement, status, 0)) {
      // Migrate all and output addresses that could not migrate
